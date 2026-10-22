@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../../../../domain/models/network_adapter_info.dart';
 import '../view_models/syslog_view_model.dart';
 
 class SyslogControlBar extends StatefulWidget {
@@ -86,6 +88,82 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
                 ),
                 const SizedBox(width: 16),
 
+                // Network Interface Selector
+                const Text('Interface:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                const SizedBox(width: 6),
+                Container(
+                  height: 32,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF252526),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF3E3E42)),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<NetworkAdapterInfo>(
+                      value: vm.adapters.contains(vm.selectedAdapter)
+                          ? vm.selectedAdapter
+                          : vm.adapters.first,
+                      isDense: true,
+                      icon: const Icon(Icons.arrow_drop_down, size: 18),
+                      style: const TextStyle(fontSize: 12, color: Colors.white),
+                      dropdownColor: const Color(0xFF252526),
+                      onChanged: isListening
+                          ? null
+                          : (adapter) {
+                              if (adapter != null) vm.selectAdapter(adapter);
+                            },
+                      items: vm.adapters.map((adapter) {
+                        IconData icon = Icons.lan_outlined;
+                        if (adapter.isAllInterfaces) {
+                          icon = Icons.public;
+                        } else if (adapter.name.toLowerCase().contains('wi-fi') ||
+                            adapter.name.toLowerCase().contains('wlan')) {
+                          icon = Icons.wifi;
+                        } else if (adapter.ipAddress == '127.0.0.1') {
+                          icon = Icons.loop;
+                        }
+
+                        return DropdownMenuItem<NetworkAdapterInfo>(
+                          value: adapter,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(icon, size: 14, color: Theme.of(context).colorScheme.primary),
+                              const SizedBox(width: 6),
+                              Text(adapter.displayName),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: 'Copy IP address (${vm.selectedAdapter.ipAddress})',
+                  icon: const Icon(Icons.copy, size: 14),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: vm.selectedAdapter.ipAddress));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Copied ${vm.selectedAdapter.ipAddress} to clipboard'),
+                        duration: const Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                ),
+                IconButton(
+                  tooltip: 'Refresh network interfaces',
+                  icon: const Icon(Icons.refresh, size: 14),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                  onPressed: isListening ? null : () => vm.refreshAdapters(),
+                ),
+                const SizedBox(width: 14),
+
                 // Port configuration
                 const Text('Port:', style: TextStyle(fontSize: 12, color: Colors.grey)),
                 const SizedBox(width: 6),
@@ -102,7 +180,7 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
 
                 // Presets dropdown
                 if (!isListening)

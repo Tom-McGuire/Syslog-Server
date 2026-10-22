@@ -6,6 +6,8 @@ import '../../domain/models/syslog_severity.dart';
 import '../services/database/syslog_database_service.dart';
 import '../services/generator/demo_syslog_generator.dart';
 import '../services/listener/syslog_listener_service.dart';
+import '../services/network/network_adapter_service.dart';
+import '../../domain/models/network_adapter_info.dart';
 
 class SyslogRepository {
   SyslogRepository({
@@ -29,6 +31,10 @@ class SyslogRepository {
   Stream<ServerStatus> get onStatusChanged => _statusStreamController.stream;
 
   ServerStatus get currentStatus => _listener.status;
+
+  Future<List<NetworkAdapterInfo>> getNetworkAdapters() {
+    return NetworkAdapterService.getAvailableAdapters();
+  }
 
   void _handleBatchReceived(List<SyslogRecord> rawBatch) {
     if (rawBatch.isEmpty || _batchStreamController.isClosed) return;

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../../data/repositories/syslog_repository.dart';
 import '../../../../data/services/export/export_service.dart';
+import '../../../../domain/models/network_adapter_info.dart';
 import '../../../../domain/models/server_status.dart';
 import '../../../../domain/models/syslog_facility.dart';
 import '../../../../domain/models/syslog_filter.dart';
@@ -33,6 +34,9 @@ class SyslogViewModel extends ChangeNotifier {
   );
 
   ServerStatus _serverStatus = const ServerStatus();
+  List<NetworkAdapterInfo> _adapters = [NetworkAdapterInfo.all];
+  NetworkAdapterInfo _selectedAdapter = NetworkAdapterInfo.all;
+
   bool _autoScroll = true;
   final bool _isLoading = false;
   bool _isLoadingMore = false;
@@ -45,6 +49,8 @@ class SyslogViewModel extends ChangeNotifier {
   Map<SyslogSeverity, int> get severityCounts => _severityCounts;
   SyslogFilterCriteria get filter => _filter;
   ServerStatus get serverStatus => _serverStatus;
+  List<NetworkAdapterInfo> get adapters => _adapters;
+  NetworkAdapterInfo get selectedAdapter => _selectedAdapter;
   bool get autoScroll => _autoScroll;
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
@@ -72,6 +78,22 @@ class SyslogViewModel extends ChangeNotifier {
     });
 
     _refreshState();
+    refreshAdapters();
+  }
+
+  Future<void> refreshAdapters() async {
+    final list = await _repository.getNetworkAdapters();
+    _adapters = list;
+    if (!_adapters.contains(_selectedAdapter)) {
+      _selectedAdapter = NetworkAdapterInfo.all;
+    }
+    notifyListeners();
+  }
+
+  void selectAdapter(NetworkAdapterInfo adapter) {
+    if (_selectedAdapter == adapter) return;
+    _selectedAdapter = adapter;
+    notifyListeners();
   }
 
   void _refreshState() {
@@ -118,14 +140,14 @@ class SyslogViewModel extends ChangeNotifier {
   // Server management
   Future<void> startServer({
     int port = 514,
-    String bindAddress = '0.0.0.0',
+    String? bindAddress,
     bool enableUdp = true,
     bool enableTcp = true,
   }) async {
     try {
       await _repository.startServer(
         port: port,
-        bindAddress: bindAddress,
+        bindAddress: bindAddress ?? _selectedAdapter.ipAddress,
         enableUdp: enableUdp,
         enableTcp: enableTcp,
       );
