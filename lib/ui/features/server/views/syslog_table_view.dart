@@ -195,6 +195,25 @@ class _SyslogTableViewState extends State<SyslogTableView> {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                FilledButton.tonalIcon(
+                  icon: const Icon(Icons.file_open_outlined, size: 16),
+                  label: const Text('Open CSV File'),
+                  onPressed: () async {
+                    final result = await vm.importCsvFile(replaceExisting: true);
+                    if (result != null && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Imported ${result.importedCount} logs from CSV (${result.detectedFormat})'
+                            '${result.skippedCount > 0 ? ' [${result.skippedCount} skipped]' : ''}',
+                          ),
+                          duration: const Duration(seconds: 3),
+                        ),
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(width: 12),
                 if (!isListening) ...[
                   FilledButton.icon(
                     icon: const Icon(Icons.play_arrow, size: 16),
@@ -482,6 +501,17 @@ class _SyslogTableViewState extends State<SyslogTableView> {
             const Text(
               '• Scroll down to load next batch of 1,000',
               style: TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+          ],
+          if (vm.loadedFileName != null) ...[
+            const SizedBox(width: 8),
+            Text(
+              '• File: ${vm.loadedFileName}',
+              style: TextStyle(
+                fontSize: 11,
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
           const Spacer(),

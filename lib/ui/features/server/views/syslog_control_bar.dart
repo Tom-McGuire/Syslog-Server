@@ -27,6 +27,8 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
     final vm = context.watch<SyslogViewModel>();
     final isListening = vm.serverStatus.isListening;
     final lastError = vm.serverStatus.lastError;
+    final loadedFileName = vm.loadedFileName;
+    final isImporting = vm.isImporting;
 
     return Container(
       decoration: BoxDecoration(
@@ -225,7 +227,64 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
                     const Text('TCP', style: TextStyle(fontSize: 12)),
                   ],
                 ),
-                const SizedBox(width: 24),
+                const SizedBox(width: 20),
+
+                // Loaded File Badge (if active)
+                if (loadedFileName != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.6),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.insert_drive_file_outlined, size: 14, color: Theme.of(context).colorScheme.primary),
+                        const SizedBox(width: 6),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 160),
+                          child: Text(
+                            loadedFileName,
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        InkWell(
+                          onTap: () => vm.closeLoadedFile(),
+                          borderRadius: BorderRadius.circular(10),
+                          child: const Padding(
+                            padding: EdgeInsets.all(2),
+                            child: Icon(Icons.close, size: 12, color: Colors.grey),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+
+                // Open CSV Button
+                FilledButton.tonalIcon(
+                  onPressed: isImporting ? null : () => _handleImportCsv(context, vm),
+                  icon: isImporting
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.file_open_outlined, size: 16),
+                  label: Text(isImporting ? 'Importing...' : 'Open CSV'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+                const SizedBox(width: 8),
 
                 // Demo Logs Button
                 OutlinedButton.icon(
@@ -320,6 +379,51 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
         ],
       ),
     );
+  }
+
+  Future<void> _handleImportCsv(BuildContext context, SyslogViewModel vm) async {
+    bool replaceExisting = true;
+    if (vm.logs.isNotEmpty) {
+      final choice = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Import CSV File'),
+          content: const Text(
+            'You currently have logs in the active session. Would you like to replace the current logs or append the imported file?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(null),
+              child: const Text('Cancel'),
+            ),
+            OutlinedButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Append to Existing'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Replace Session'),
+            ),
+          ],
+        ),
+      );
+
+      if (choice == null) return;
+      replaceExisting = choice;
+    }
+
+    final result = await vm.importCsvFile(replaceExisting: replaceExisting);
+    if (result != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Imported ${result.importedCount} logs from CSV (${result.detectedFormat})'
+            '${result.skippedCount > 0 ? ' [${result.skippedCount} skipped]' : ''}',
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   void _confirmClear(BuildContext context, SyslogViewModel vm) {

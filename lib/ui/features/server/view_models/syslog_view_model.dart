@@ -1,7 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../../../../data/repositories/syslog_repository.dart';
 import '../../../../data/services/export/export_service.dart';
+import '../../../../data/services/import/csv_import_service.dart';
 import '../../../../domain/models/network_adapter_info.dart';
 import '../../../../domain/models/server_status.dart';
 import '../../../../domain/models/syslog_facility.dart';
@@ -40,6 +44,7 @@ class SyslogViewModel extends ChangeNotifier {
   bool _autoScroll = true;
   final bool _isLoading = false;
   bool _isLoadingMore = false;
+  bool _isImporting = false;
   static const int defaultPageSize = 1000;
 
   // Getters
@@ -51,9 +56,11 @@ class SyslogViewModel extends ChangeNotifier {
   ServerStatus get serverStatus => _serverStatus;
   List<NetworkAdapterInfo> get adapters => _adapters;
   NetworkAdapterInfo get selectedAdapter => _selectedAdapter;
+  String? get loadedFileName => _repository.loadedFileName;
   bool get autoScroll => _autoScroll;
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
+  bool get isImporting => _isImporting;
   bool get hasMoreLogs => _logs.length < _totalLogCount;
   String get sortColumn => _filter.sortColumn;
   bool get sortAscending => _filter.sortAscending;
@@ -224,6 +231,46 @@ class SyslogViewModel extends ChangeNotifier {
   void loadDemoLogs() {
     _repository.loadDemoLogs();
     _refreshState();
+  }
+
+  Future<CsvImportResult?> importCsvFile({bool replaceExisting = true}) async {
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv', 'txt', 'log'],
+      );
+
+      if (result.isEmpty) return null;
+      final file = result.first;
+      String content;
+
+      if (file.path != null) {
+        content = await File(file.path!).readAsString();
+      } else {
+        final bytes = await file.readAsBytes();
+        content = utf8.decode(bytes, allowMalformed: true);
+      }
+
+      _isImporting = true;
+      notifyListeners();
+
+      final importResult = await _repository.importCsvContent(
+        content,
+        fileName: file.name,
+        replaceExisting: replaceExisting,
+      );
+
+      _refreshState();
+      return importResult;
+    } finally {
+      _isImporting = false;
+      notifyListeners();
+    }
+  }
+
+  void closeLoadedFile() {
+    _repository.closeLoadedFile();
+    notifyListeners();
   }
 
   Future<String?> exportCsv() async {
