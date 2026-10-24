@@ -146,6 +146,21 @@ class CsvImportService {
     return false;
   }
 
+  static String? _unsanitizeCsv(String? val) {
+    if (val != null && val.length > 1 && val.startsWith("'")) {
+      final nextChar = val[1];
+      if (nextChar == '=' ||
+          nextChar == '+' ||
+          nextChar == '-' ||
+          nextChar == '@' ||
+          nextChar == '\t' ||
+          nextChar == '\r') {
+        return val.substring(1);
+      }
+    }
+    return (val != null && val.isNotEmpty) ? val : null;
+  }
+
   static SyslogRecord? _parseStructuredRow(
     List<dynamic> row,
     Map<String, int> headerMap,
@@ -155,7 +170,7 @@ class CsvImportService {
       final idx = headerMap[key];
       if (idx != null && idx < row.length) {
         final val = row[idx]?.toString().trim();
-        return (val != null && val.isNotEmpty) ? val : null;
+        return _unsanitizeCsv(val);
       }
       return null;
     }

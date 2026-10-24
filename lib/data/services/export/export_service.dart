@@ -5,6 +5,22 @@ import 'package:file_picker/file_picker.dart';
 import '../../../domain/models/syslog_record.dart';
 
 class ExportService {
+  /// Sanitizes text according to OWASP CSV Injection guidelines.
+  /// If a field begins with =, +, -, @, \t, or \r, it is prefixed with a single quote.
+  static String sanitizeForCsv(String? value) {
+    if (value == null || value.isEmpty) return '';
+    final firstChar = value[0];
+    if (firstChar == '=' ||
+        firstChar == '+' ||
+        firstChar == '-' ||
+        firstChar == '@' ||
+        firstChar == '\t' ||
+        firstChar == '\r') {
+      return "'$value";
+    }
+    return value;
+  }
+
   static String logsToCsv(List<SyslogRecord> logs) {
     final rows = <List<dynamic>>[
       [
@@ -24,16 +40,16 @@ class ExportService {
       ...logs.map((r) => [
             r.id ?? '',
             r.receivedAt.toIso8601String(),
-            r.remoteIp,
+            sanitizeForCsv(r.remoteIp),
             r.remotePort,
-            r.transport,
-            r.severity.label,
-            r.facility.nameStr,
-            r.hostname ?? '',
-            r.appName ?? '',
-            r.procId ?? '',
-            r.message,
-            r.rawPayload,
+            sanitizeForCsv(r.transport),
+            sanitizeForCsv(r.severity.label),
+            sanitizeForCsv(r.facility.nameStr),
+            sanitizeForCsv(r.hostname),
+            sanitizeForCsv(r.appName),
+            sanitizeForCsv(r.procId),
+            sanitizeForCsv(r.message),
+            sanitizeForCsv(r.rawPayload),
           ]),
     ];
 
@@ -49,7 +65,6 @@ class ExportService {
     required String content,
     required String defaultFileName,
     required String dialogTitle,
-    String? extension,
   }) async {
     final bytes = Uint8List.fromList(utf8.encode(content));
     final uri = await FilePicker.saveFile(

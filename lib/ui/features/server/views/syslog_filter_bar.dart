@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../domain/models/syslog_facility.dart';
@@ -14,12 +15,30 @@ class SyslogFilterBar extends StatefulWidget {
 class _SyslogFilterBarState extends State<SyslogFilterBar> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _ipController = TextEditingController();
+  Timer? _searchDebounce;
+  Timer? _ipDebounce;
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _ipDebounce?.cancel();
     _searchController.dispose();
     _ipController.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged(String val, SyslogViewModel vm) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+      vm.setSearchQuery(val);
+    });
+  }
+
+  void _onIpChanged(String val, SyslogViewModel vm) {
+    _ipDebounce?.cancel();
+    _ipDebounce = Timer(const Duration(milliseconds: 250), () {
+      vm.setRemoteIpFilter(val);
+    });
   }
 
   @override
@@ -37,14 +56,14 @@ class _SyslogFilterBarState extends State<SyslogFilterBar> {
           // Row 1: Search text & IP input & Reset
           Row(
             children: [
-              // Search Query
+              // Search Query with 250ms debounce
               Expanded(
                 flex: 3,
                 child: SizedBox(
                   height: 34,
                   child: TextField(
                     controller: _searchController,
-                    onChanged: (val) => vm.setSearchQuery(val),
+                    onChanged: (val) => _onSearchChanged(val, vm),
                     style: const TextStyle(fontSize: 12),
                     decoration: InputDecoration(
                       hintText: 'Search message, host, app, IP...',
@@ -53,6 +72,7 @@ class _SyslogFilterBarState extends State<SyslogFilterBar> {
                           ? IconButton(
                               icon: const Icon(Icons.clear, size: 14),
                               onPressed: () {
+                                _searchDebounce?.cancel();
                                 _searchController.clear();
                                 vm.setSearchQuery('');
                               },
@@ -64,14 +84,14 @@ class _SyslogFilterBarState extends State<SyslogFilterBar> {
               ),
               const SizedBox(width: 12),
 
-              // Source IP filter
+              // Source IP filter with 250ms debounce
               Expanded(
                 flex: 2,
                 child: SizedBox(
                   height: 34,
                   child: TextField(
                     controller: _ipController,
-                    onChanged: (val) => vm.setRemoteIpFilter(val),
+                    onChanged: (val) => _onIpChanged(val, vm),
                     style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
                     decoration: InputDecoration(
                       hintText: 'Filter Source IP...',
@@ -80,6 +100,7 @@ class _SyslogFilterBarState extends State<SyslogFilterBar> {
                           ? IconButton(
                               icon: const Icon(Icons.clear, size: 14),
                               onPressed: () {
+                                _ipDebounce?.cancel();
                                 _ipController.clear();
                                 vm.setRemoteIpFilter('');
                               },
@@ -137,6 +158,8 @@ class _SyslogFilterBarState extends State<SyslogFilterBar> {
                 const SizedBox(width: 12),
                 TextButton.icon(
                   onPressed: () {
+                    _searchDebounce?.cancel();
+                    _ipDebounce?.cancel();
                     _searchController.clear();
                     _ipController.clear();
                     vm.resetFilters();

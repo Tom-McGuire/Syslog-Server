@@ -5,17 +5,19 @@ import '../../../domain/models/syslog_record.dart';
 import '../../../domain/models/syslog_severity.dart';
 
 class SyslogDatabaseService {
-  SyslogDatabaseService({Database? db}) : _db = db ?? sqlite3.openInMemory() {
+  SyslogDatabaseService({
+    Database? db,
+    this.maxRows = 500000,
+  }) : _db = db ?? sqlite3.openInMemory() {
     _initSchema();
   }
 
   final Database _db;
+  final int maxRows;
   Database get db => _db;
 
   void _initSchema() {
-    // Optimize performance with WAL and synchronous normal if file-backed
     try {
-      _db.execute('PRAGMA journal_mode = WAL;');
       _db.execute('PRAGMA synchronous = NORMAL;');
     } catch (_) {}
 
@@ -48,14 +50,16 @@ class SyslogDatabaseService {
     ''');
   }
 
-  /// Batch insert syslog records inside a single transaction for maximum throughput.
+  /// Batch insert syslog records inside a single transaction with automatic retention pruning.
   List<SyslogRecord> insertBatch(List<SyslogRecord> records) {
     if (records.isEmpty) return [];
 
     final inserted = <SyslogRecord>[];
+    PreparedStatement? stmt;
+
     _db.execute('BEGIN TRANSACTION');
     try {
-      final stmt = _db.prepare('''
+      stmt = _db.prepare('''
         INSERT INTO syslog_records (
           received_at_ms, remote_ip, remote_port, transport,
           facility, facility_name, severity, severity_name,
@@ -87,13 +91,31 @@ class SyslogDatabaseService {
         final id = _db.lastInsertRowId;
         inserted.add(r.copyWith(id: id));
       }
-      stmt.close();
       _db.execute('COMMIT');
     } catch (e) {
       _db.execute('ROLLBACK');
       rethrow;
+    } finally {
+      stmt?.close();
     }
+
+    _enforceRetentionCap();
     return inserted;
+  }
+
+  void _enforceRetentionCap() {
+    if (maxRows <= 0) return;
+    try {
+      final cntResult = _db.select('SELECT COUNT(*) as cnt FROM syslog_records');
+      final currentCount = cntResult.first['cnt'] as int? ?? 0;
+      if (currentCount > maxRows) {
+        final excess = currentCount - maxRows;
+        _db.execute(
+          'DELETE FROM syslog_records WHERE id IN (SELECT id FROM syslog_records ORDER BY id ASC LIMIT ?)',
+          [excess],
+        );
+      }
+    } catch (_) {}
   }
 
   /// Query logs with pagination and filters
@@ -166,14 +188,23 @@ class SyslogDatabaseService {
     } catch (_) {}
   }
 
+  static String _escapeLike(String text) {
+    return text
+        .replaceAll(r'\', r'\\')
+        .replaceAll('%', r'\%')
+        .replaceAll('_', r'\_');
+  }
+
   (String, List<dynamic>) _buildWhereClause(SyslogFilterCriteria filter) {
     final clauses = <String>[];
     final params = <dynamic>[];
 
-    // Search query matches message, hostname, app_name, or remote_ip
+    // Search query matches message, hostname, app_name, or remote_ip with LIKE wildcard escaping
     if (filter.searchQuery.trim().isNotEmpty) {
-      final q = '%${filter.searchQuery.trim()}%';
-      clauses.add('(message LIKE ? OR hostname LIKE ? OR app_name LIKE ? OR remote_ip LIKE ?)');
+      final q = '%${_escapeLike(filter.searchQuery.trim())}%';
+      clauses.add(
+        "(message LIKE ? ESCAPE '\\' OR hostname LIKE ? ESCAPE '\\' OR app_name LIKE ? ESCAPE '\\' OR remote_ip LIKE ? ESCAPE '\\')",
+      );
       params.addAll([q, q, q, q]);
     }
 
@@ -193,22 +224,22 @@ class SyslogDatabaseService {
       params.addAll(filter.selectedFacilities.map((f) => f.code));
     }
 
-    // Remote IP filter
+    // Remote IP filter with wildcard escaping
     if (filter.remoteIp.trim().isNotEmpty) {
-      clauses.add('remote_ip LIKE ?');
-      params.add('%${filter.remoteIp.trim()}%');
+      clauses.add("remote_ip LIKE ? ESCAPE '\\'");
+      params.add('%${_escapeLike(filter.remoteIp.trim())}%');
     }
 
-    // Hostname filter
+    // Hostname filter with wildcard escaping
     if (filter.hostname.trim().isNotEmpty) {
-      clauses.add('hostname LIKE ?');
-      params.add('%${filter.hostname.trim()}%');
+      clauses.add("hostname LIKE ? ESCAPE '\\'");
+      params.add('%${_escapeLike(filter.hostname.trim())}%');
     }
 
-    // App name filter
+    // App name filter with wildcard escaping
     if (filter.appName.trim().isNotEmpty) {
-      clauses.add('app_name LIKE ?');
-      params.add('%${filter.appName.trim()}%');
+      clauses.add("app_name LIKE ? ESCAPE '\\'");
+      params.add('%${_escapeLike(filter.appName.trim())}%');
     }
 
     // Time window

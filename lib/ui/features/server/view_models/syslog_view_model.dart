@@ -24,6 +24,8 @@ class SyslogViewModel extends ChangeNotifier {
 
   StreamSubscription? _batchSubscription;
   StreamSubscription? _statusSubscription;
+  Timer? _uiThrottleTimer;
+  bool _pendingThrottleRefresh = false;
 
   List<SyslogRecord> _logs = [];
   SyslogRecord? _selectedRecord;
@@ -42,7 +44,6 @@ class SyslogViewModel extends ChangeNotifier {
   NetworkAdapterInfo _selectedAdapter = NetworkAdapterInfo.all;
 
   bool _autoScroll = true;
-  final bool _isLoading = false;
   bool _isLoadingMore = false;
   bool _isImporting = false;
   static const int defaultPageSize = 1000;
@@ -58,7 +59,6 @@ class SyslogViewModel extends ChangeNotifier {
   NetworkAdapterInfo get selectedAdapter => _selectedAdapter;
   String? get loadedFileName => _repository.loadedFileName;
   bool get autoScroll => _autoScroll;
-  bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
   bool get isImporting => _isImporting;
   bool get hasMoreLogs => _logs.length < _totalLogCount;
@@ -74,18 +74,31 @@ class SyslogViewModel extends ChangeNotifier {
     });
 
     _batchSubscription = _repository.onBatchInserted.listen((newRecords) {
-      _totalLogCount = _repository.getLogCount(_filter);
-      _severityCounts = _repository.getSeverityCounts();
-
       if (_autoScroll) {
-        _refreshState();
+        _onBatchInsertedThrottled();
       } else {
+        _totalLogCount = _repository.getLogCount(_filter);
+        _severityCounts = _repository.getSeverityCounts();
         notifyListeners();
       }
     });
 
     _refreshState();
     refreshAdapters();
+  }
+
+  void _onBatchInsertedThrottled() {
+    _pendingThrottleRefresh = true;
+    if (_uiThrottleTimer != null && _uiThrottleTimer!.isActive) {
+      return;
+    }
+
+    _uiThrottleTimer = Timer(const Duration(milliseconds: 250), () {
+      if (_pendingThrottleRefresh) {
+        _pendingThrottleRefresh = false;
+        _refreshState();
+      }
+    });
   }
 
   Future<void> refreshAdapters() async {
@@ -284,7 +297,6 @@ class SyslogViewModel extends ChangeNotifier {
       content: csv,
       defaultFileName: 'syslog_export_${DateTime.now().millisecondsSinceEpoch}.csv',
       dialogTitle: 'Export Syslog to CSV',
-      extension: 'csv',
     );
   }
 
@@ -299,12 +311,12 @@ class SyslogViewModel extends ChangeNotifier {
       content: json,
       defaultFileName: 'syslog_export_${DateTime.now().millisecondsSinceEpoch}.json',
       dialogTitle: 'Export Syslog to JSON',
-      extension: 'json',
     );
   }
 
   @override
   void dispose() {
+    _uiThrottleTimer?.cancel();
     _batchSubscription?.cancel();
     _statusSubscription?.cancel();
     _repository.dispose();

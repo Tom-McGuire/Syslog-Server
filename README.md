@@ -2,21 +2,23 @@
 
 A portable, cross-platform Syslog server desktop application built with **Flutter Desktop** (Windows, macOS, Linux) and powered by an embedded **SQLite** engine.
 
-Designed for network engineers, system administrators, and developers who need a lightweight, self-contained Syslog server to capture, inspect, and analyze logs sent from network devices (firewalls, switches, routers, Linux/Windows servers, ESXi hosts) in real-time.
+Designed for network engineers, system administrators, and developers who need a lightweight, self-contained Syslog server to capture, inspect, and analyze logs sent from network devices (firewalls, switches, routers, Linux/Windows servers, ESXi hosts) in real-time or offline via CSV imports.
 
 ---
 
-## ✨ Features
+## Features
 
 - **Cross-Platform Desktop**: Native support for **Windows**, **macOS**, and **Linux**.
 - **Dual Protocol Ingestion**: Simultaneous **UDP** and **TCP** socket listeners with configurable port (standard `514`, `1514`, `5140`, or custom).
+- **Network Interface Selector**: Detects active network adapters (Ethernet, Wi-Fi, Loopback, or All Interfaces `0.0.0.0`) with a one-click "Copy IP" helper for quick device configuration.
 - **Standards Compliant**:
   - **RFC 5424** (Modern IETF Syslog with structured headers, app names, PIDs, message IDs).
   - **RFC 3164** (BSD legacy format with hostname and tag parsing).
   - Resilient fallback for unstructured and device-specific logs (e.g., Cisco ASA, switches).
 - **SQLite Storage & Query Engine**:
-  - Embedded `sqlite3` database with Write-Ahead Logging (WAL) for high-throughput packet ingestion without UI stutter.
+  - Embedded `sqlite3` database with indexed queries for high-throughput packet ingestion without UI stutter.
   - Micro-batch buffering (50ms) to easily absorb sudden network log storms.
+  - Automatic retention limit (oldest records pruned beyond maximum row limit).
 - **Virtualized High-Performance Table View**:
   - Modeled after [Packet Inspector](https://github.com/Tom-McGuire/packet-inspector)'s high-density desktop table.
   - **Dynamic resizable columns** with drag handles.
@@ -27,59 +29,66 @@ Designed for network engineers, system administrators, and developers who need a
   - Color-coded severity chips with live message counts (Emergency, Alert, Critical, Error, Warning, Notice, Info, Debug).
   - Facility multi-select dropdown (kern, user, auth, daemon, local0..local7, etc.).
   - Dedicated source IP filter input.
-- **Log Inspection & Export**:
+- **Offline Investigation (CSV Import & Export)**:
+  - **CSV Import**: Load CSV logs exported from this application, Kiwi Syslog, Splunk, Graylog, or raw syslog text files.
+  - **Export**: One-click export to sanitized **CSV** (formula injection protected) and **JSON**.
+  - **Demo Logs**: Built-in sample log generator to test the interface without external hardware.
+- **Log Inspection & Utilities**:
   - Bottom collapsible inspection panel with formatted metadata and raw packet viewer.
   - Right-click context menu (copy message, copy raw packet, quick filter by IP or host).
-  - One-click export to **CSV** and **JSON**.
-  - Built-in **Demo Logs** generator to test the interface without external hardware.
 
 ---
 
-## 🛠️ Architecture
+## Architecture
 
 ```
 lib/
-├── domain/                     # Pure domain logic and models
-│   └── models/
-│       ├── syslog_record.dart       # Syslog entry entity
-│       ├── syslog_severity.dart     # Severity levels & color coding
-│       ├── syslog_facility.dart     # Syslog facilities (0-23)
-│       ├── syslog_filter.dart       # Filter & search criteria
-│       └── server_status.dart       # Ingestion statistics
-│
-├── data/                       # Data services & repositories
-│   ├── repositories/
-│   │   └── syslog_repository.dart   # Coordinates sockets and SQLite
-│   └── services/
-│       ├── parser/
-│       │   └── syslog_parser.dart   # RFC 5424 & RFC 3164 parser
-│       ├── database/
-│       │   └── syslog_database_service.dart # SQLite batching & queries
-│       ├── listener/
-│       │   └── syslog_listener_service.dart # UDP & TCP sockets
-│       ├── export/
-│       │   └── export_service.dart  # CSV & JSON export
-│       └── generator/
-│           └── demo_syslog_generator.dart   # Sample device logs
-│
-└── ui/                         # Presentation Layer
-    ├── theme/
-    │   └── app_theme.dart           # Desktop dark theme
-    └── features/
-        └── server/
-            ├── view_models/
-            │   └── syslog_view_model.dart   # Provider ChangeNotifier
-            └── views/
-                ├── syslog_screen.dart       # Main scaffold
-                ├── syslog_control_bar.dart  # Server start/stop & port configuration
-                ├── syslog_filter_bar.dart   # Search & severity chips
-                ├── syslog_table_view.dart   # Virtualized resizable table
-                └── syslog_detail_panel.dart # Raw packet inspector
+|-- domain/                     # Pure domain logic and models
+|   `-- models/
+|       |-- syslog_record.dart       # Syslog entry entity
+|       |-- syslog_severity.dart     # Severity levels & color coding
+|       |-- syslog_facility.dart     # Syslog facilities (0-23)
+|       |-- syslog_filter.dart       # Filter & search criteria
+|       |-- server_status.dart       # Ingestion statistics
+|       `-- network_adapter_info.dart # Detected network interfaces
+|
+|-- data/                       # Data services & repositories
+|   |-- repositories/
+|   |   `-- syslog_repository.dart   # Coordinates sockets and SQLite
+|   `-- services/
+|       |-- parser/
+|       |   `-- syslog_parser.dart   # RFC 5424 & RFC 3164 parser
+|       |-- database/
+|       |   `-- syslog_database_service.dart # SQLite batching & queries
+|       |-- listener/
+|       |   `-- syslog_listener_service.dart # UDP & TCP sockets
+|       |-- import/
+|       |   `-- csv_import_service.dart # CSV & raw log importer
+|       |-- export/
+|       |   `-- export_service.dart  # CSV & JSON export
+|       |-- network/
+|       |   `-- network_adapter_service.dart # Adapter enumeration
+|       `-- generator/
+|           `-- demo_syslog_generator.dart   # Sample device logs
+|
+`-- ui/                         # Presentation Layer
+    |-- theme/
+    |   `-- app_theme.dart           # Desktop dark theme
+    `-- features/
+        `-- server/
+            |-- view_models/
+            |   `-- syslog_view_model.dart   # Provider ChangeNotifier
+            `-- views/
+                |-- syslog_screen.dart       # Main scaffold
+                |-- syslog_control_bar.dart  # Controls, interface, & port
+                |-- syslog_filter_bar.dart   # Search & severity chips
+                |-- syslog_table_view.dart   # Virtualized resizable table
+                `-- syslog_detail_panel.dart # Raw packet inspector
 ```
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -116,7 +125,7 @@ lib/
 
 ---
 
-## 🔒 Port 514 & Platform Permissions
+## Port 514 & Platform Permissions
 
 - **Windows**: Standard users can bind UDP sockets, but Windows Defender Firewall will prompt to allow incoming network traffic on first run.
 - **macOS & Linux**: Standard Syslog port `514` is a privileged port (`< 1024`).
@@ -125,17 +134,17 @@ lib/
 
 ---
 
-## 🧪 Testing
+## Testing
 
 Run the automated test suite:
 ```bash
 flutter test
 ```
 
-Includes unit tests for RFC 5424 / RFC 3164 parsing, SQLite batch ingestion & SQL queries, live loopback UDP socket ingestion, and widget UI smoke tests.
+Includes unit tests for RFC 5424 / RFC 3164 parsing, SQLite batch ingestion & SQL queries, live loopback UDP socket ingestion, CSV import/export, and widget UI smoke tests.
 
 ---
 
-## 📄 License
+## License
 
 MIT License. See [LICENSE](LICENSE) for details.

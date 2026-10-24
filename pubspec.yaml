@@ -1,5 +1,5 @@
 name: syslog_server
-description: "A new Flutter project."
+description: "A portable, cross-platform Syslog server desktop application built with Flutter and SQLite."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev

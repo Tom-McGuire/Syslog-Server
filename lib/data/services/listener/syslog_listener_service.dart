@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import '../../../domain/models/server_status.dart';
 import '../../../domain/models/syslog_record.dart';
 import '../parser/syslog_parser.dart';
@@ -20,6 +21,11 @@ class SyslogListenerService {
   RawDatagramSocket? _udpSocket;
   ServerSocket? _tcpServer;
   final List<StreamSubscription> _subscriptions = [];
+  final Set<Socket> _activeTcpClients = {};
+
+  static const int maxConcurrentTcpClients = 256;
+  static const int maxTcpLineLength = 65536; // 64 KB per line cap
+  static const Duration tcpIdleTimeout = Duration(seconds: 120);
 
   final List<SyslogRecord> _buffer = [];
   Timer? _flushTimer;
@@ -55,9 +61,9 @@ class SyslogListenerService {
         : InternetAddress(bindAddress);
 
     try {
-      // 1. Start UDP Socket
+      // 1. Start UDP Socket (exclusive bind to detect port collisions reliably)
       if (enableUdp) {
-        _udpSocket = await RawDatagramSocket.bind(address, port, reuseAddress: true);
+        _udpSocket = await RawDatagramSocket.bind(address, port, reuseAddress: false);
         final sub = _udpSocket!.listen(
           _handleUdpEvent,
           onError: (e) => _handleError('UDP Socket error: $e'),
@@ -66,9 +72,9 @@ class SyslogListenerService {
         _subscriptions.add(sub);
       }
 
-      // 2. Start TCP Server
+      // 2. Start TCP Server (shared: false prevents another process splitting connections)
       if (enableTcp) {
-        _tcpServer = await ServerSocket.bind(address, port, shared: true);
+        _tcpServer = await ServerSocket.bind(address, port, shared: false);
         final sub = _tcpServer!.listen(
           _handleTcpClient,
           onError: (e) => _handleError('TCP Server error: $e'),
@@ -107,6 +113,8 @@ class SyslogListenerService {
   }
 
   void _handleUdpEvent(RawSocketEvent event) {
+    if (!_currentStatus.isListening) return;
+
     if (event == RawSocketEvent.read && _udpSocket != null) {
       while (true) {
         final dg = _udpSocket!.receive();
@@ -132,34 +140,93 @@ class SyslogListenerService {
   }
 
   void _handleTcpClient(Socket client) {
+    if (!_currentStatus.isListening || _activeTcpClients.length >= maxConcurrentTcpClients) {
+      client.destroy();
+      return;
+    }
+
+    _activeTcpClients.add(client);
     final clientIp = client.remoteAddress.address;
     final clientPort = client.remotePort;
 
-    client
-        .cast<List<int>>()
-        .transform(utf8.decoder)
-        .transform(const LineSplitter())
+    final lineBuffer = BytesBuilder(copy: false);
+    StreamSubscription? clientSub;
+
+    void cleanupClient() {
+      _activeTcpClients.remove(client);
+      clientSub?.cancel();
+      try {
+        client.destroy();
+      } catch (_) {}
+    }
+
+    clientSub = client
+        .timeout(
+          tcpIdleTimeout,
+          onTimeout: (sink) {
+            cleanupClient();
+          },
+        )
         .listen(
-          (line) {
-            if (line.trim().isEmpty) return;
-            _totalBytes += line.length;
-            _totalCount++;
+          (Uint8List chunk) {
+            if (!_currentStatus.isListening) {
+              cleanupClient();
+              return;
+            }
 
-            final record = SyslogParser.parse(
-              raw: line,
-              remoteIp: clientIp,
-              remotePort: clientPort,
-              transport: 'TCP',
-            );
+            // Raw byte count (correct bytes accounting)
+            _totalBytes += chunk.length;
 
-            _buffer.add(record);
-            if (_buffer.length >= 200) {
-              _flushBuffer();
+            for (int i = 0; i < chunk.length; i++) {
+              final byte = chunk[i];
+              if (byte == 10) { // \n newline delimiter
+                final lineBytes = lineBuffer.takeBytes();
+                if (lineBytes.isNotEmpty) {
+                  _processTcpLine(lineBytes, clientIp, clientPort);
+                }
+              } else if (byte != 13) { // ignore \r
+                lineBuffer.addByte(byte);
+                // Memory exhaustion defense: cap maximum line length
+                if (lineBuffer.length >= maxTcpLineLength) {
+                  final lineBytes = lineBuffer.takeBytes();
+                  _processTcpLine(lineBytes, clientIp, clientPort);
+                }
+              }
             }
           },
-          onError: (_) {},
+          onError: (_) {
+            cleanupClient();
+          },
+          onDone: () {
+            // Process any trailing bytes before closing
+            if (lineBuffer.isNotEmpty && _currentStatus.isListening) {
+              final trailing = lineBuffer.takeBytes();
+              _processTcpLine(trailing, clientIp, clientPort);
+            }
+            cleanupClient();
+          },
           cancelOnError: true,
         );
+
+    _subscriptions.add(clientSub);
+  }
+
+  void _processTcpLine(Uint8List lineBytes, String clientIp, int clientPort) {
+    final rawLine = utf8.decode(lineBytes, allowMalformed: true).trim();
+    if (rawLine.isEmpty) return;
+
+    _totalCount++;
+    final record = SyslogParser.parse(
+      raw: rawLine,
+      remoteIp: clientIp,
+      remotePort: clientPort,
+      transport: 'TCP',
+    );
+
+    _buffer.add(record);
+    if (_buffer.length >= 200) {
+      _flushBuffer();
+    }
   }
 
   void _flushBuffer() {
@@ -201,6 +268,14 @@ class SyslogListenerService {
     _rateTimer = null;
 
     _flushBuffer();
+
+    // Close and destroy all active TCP client sockets
+    for (final client in _activeTcpClients) {
+      try {
+        client.destroy();
+      } catch (_) {}
+    }
+    _activeTcpClients.clear();
 
     for (final sub in _subscriptions) {
       await sub.cancel();

@@ -45,6 +45,7 @@ class SyslogFilterCriteria {
     String? appName,
     int? timeStartMs,
     int? timeEndMs,
+    bool clearTimeFilter = false,
     String? sortColumn,
     bool? sortAscending,
   }) {
@@ -55,8 +56,8 @@ class SyslogFilterCriteria {
       remoteIp: remoteIp ?? this.remoteIp,
       hostname: hostname ?? this.hostname,
       appName: appName ?? this.appName,
-      timeStartMs: timeStartMs ?? this.timeStartMs,
-      timeEndMs: timeEndMs ?? this.timeEndMs,
+      timeStartMs: clearTimeFilter ? null : (timeStartMs ?? this.timeStartMs),
+      timeEndMs: clearTimeFilter ? null : (timeEndMs ?? this.timeEndMs),
       sortColumn: sortColumn ?? this.sortColumn,
       sortAscending: sortAscending ?? this.sortAscending,
     );

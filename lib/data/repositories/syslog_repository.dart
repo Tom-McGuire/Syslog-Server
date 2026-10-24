@@ -41,9 +41,13 @@ class SyslogRepository {
 
   void _handleBatchReceived(List<SyslogRecord> rawBatch) {
     if (rawBatch.isEmpty || _batchStreamController.isClosed) return;
-    final inserted = _db.insertBatch(rawBatch);
-    if (!_batchStreamController.isClosed) {
-      _batchStreamController.add(inserted);
+    try {
+      final inserted = _db.insertBatch(rawBatch);
+      if (!_batchStreamController.isClosed) {
+        _batchStreamController.add(inserted);
+      }
+    } catch (e) {
+      _handleStatusChanged(_listener.status.copyWith(lastError: 'Database insert error: $e'));
     }
   }
 
@@ -91,7 +95,9 @@ class SyslogRepository {
     final demoLogs = DemoSyslogGenerator.generateDemoLogs();
     final inserted = _db.insertBatch(demoLogs);
     _loadedFileName = 'demo_traffic.csv';
-    _batchStreamController.add(inserted);
+    if (!_batchStreamController.isClosed) {
+      _batchStreamController.add(inserted);
+    }
   }
 
   Future<CsvImportResult> importCsvContent(
