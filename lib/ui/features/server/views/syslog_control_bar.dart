@@ -48,10 +48,14 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
             child: Row(
               children: [
                 // App Logo / Title
-                Icon(
-                  Icons.dvr,
-                  size: 24,
-                  color: Theme.of(context).colorScheme.primary,
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: Image.asset(
+                    'assets/app_icon.png',
+                    width: 24,
+                    height: 24,
+                    fit: BoxFit.cover,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 const Text(
