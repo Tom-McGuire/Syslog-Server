@@ -3,7 +3,6 @@
 *.log
 *.pyc
 *.swp
-.DS_Store
 .atom/
 .build/
 .buildlog/
@@ -12,26 +11,63 @@
 .swiftpm/
 migrate_working_dir/
 
-# IntelliJ related
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# Environment & Secrets
+.env
+.env.*
+*.env
+
+# SQLite / Local Databases & Captures
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# IntelliJ / Android Studio
 *.iml
 *.ipr
 *.iws
 .idea/
+cmake-build-*/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+# Visual Studio Code
+.vscode/
+*.code-workspace
 
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
+.flutter-plugins
 .flutter-plugins-dependencies
+.packages
 .pub-cache/
 .pub/
+pubspec-overrides.yaml
+build/
 /build/
 /coverage/
+
+# Desktop ephemeral builds
+**/flutter/ephemeral/
+**/Flutter/ephemeral/
+windows/flutter/ephemeral/
+linux/flutter/ephemeral/
+macos/Flutter/ephemeral/
 
 # Symbolication related
 app.*.symbols
@@ -46,3 +82,11 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Visual Studio / Windows toolchain user & cache files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.[Cc]ache
+!*.[Cc]ache/
