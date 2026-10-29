@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 import '../../../../domain/models/syslog_record.dart';
 import '../../../../domain/models/syslog_severity.dart';
 import '../view_models/syslog_view_model.dart';
+import 'device_mac_chip.dart';
+import 'rename_device_dialog.dart';
 
 enum SyslogTableColumn {
   no('ID', 'id', 65.0, 45.0),
@@ -424,12 +426,37 @@ class _SyslogTableViewState extends State<SyslogTableView> {
             // Message
             SizedBox(
               width: widths[SyslogTableColumn.message],
-              child: Text(
-                record.message.isEmpty ? record.rawPayload : record.message,
-                style: const TextStyle(fontSize: 12),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              child: record.detectedMacs.isEmpty
+                  ? Text(
+                      record.message.isEmpty ? record.rawPayload : record.message,
+                      style: const TextStyle(fontSize: 12),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    )
+                  : Row(
+                      children: [
+                        DeviceMacChip(
+                          mac: record.detectedMacs.first,
+                          compact: true,
+                        ),
+                        if (record.detectedMacs.length > 1) ...[
+                          const SizedBox(width: 4),
+                          Text(
+                            '+${record.detectedMacs.length - 1}',
+                            style: const TextStyle(fontSize: 10, color: Colors.grey),
+                          ),
+                        ],
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            record.message.isEmpty ? record.rawPayload : record.message,
+                            style: const TextStyle(fontSize: 12),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
             ),
           ],
         ),
@@ -604,9 +631,45 @@ class _SyslogTableViewState extends State<SyslogTableView> {
               ],
             ),
           ),
+        if (record.detectedMacs.isNotEmpty) ...[
+          const PopupMenuDivider(),
+          for (final mac in record.detectedMacs) ...[
+            PopupMenuItem(
+              value: 'rename_mac_$mac',
+              child: Row(
+                children: [
+                  const Icon(Icons.edit_note, size: 16, color: Colors.tealAccent),
+                  const SizedBox(width: 8),
+                  Text('Rename Device ($mac)'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'filter_mac_$mac',
+              child: Row(
+                children: [
+                  const Icon(Icons.filter_alt, size: 16),
+                  const SizedBox(width: 8),
+                  Text('Filter by MAC: $mac'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'copy_mac_$mac',
+              child: Row(
+                children: [
+                  const Icon(Icons.copy, size: 16),
+                  const SizedBox(width: 8),
+                  Text('Copy MAC: $mac'),
+                ],
+              ),
+            ),
+          ],
+        ],
       ],
     ).then((value) {
       if (!context.mounted) return;
+      if (value == null) return;
       if (value == 'copy_msg') {
         Clipboard.setData(ClipboardData(text: record.message));
         ScaffoldMessenger.of(context).showSnackBar(
@@ -621,6 +684,18 @@ class _SyslogTableViewState extends State<SyslogTableView> {
         vm.setRemoteIpFilter(record.remoteIp);
       } else if (value == 'filter_host') {
         vm.setSearchQuery(record.hostname!);
+      } else if (value.startsWith('rename_mac_')) {
+        final mac = value.substring('rename_mac_'.length);
+        RenameDeviceDialog.show(context, mac);
+      } else if (value.startsWith('filter_mac_')) {
+        final mac = value.substring('filter_mac_'.length);
+        vm.setSearchQuery(mac);
+      } else if (value.startsWith('copy_mac_')) {
+        final mac = value.substring('copy_mac_'.length);
+        Clipboard.setData(ClipboardData(text: mac));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('MAC $mac copied to clipboard'), duration: const Duration(seconds: 1)),
+        );
       }
     });
   }

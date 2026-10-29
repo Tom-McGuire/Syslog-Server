@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:network_suite_shared/network_suite_shared.dart';
 import '../../../../data/repositories/syslog_repository.dart';
+import '../../../../data/services/device/mac_address_helper.dart';
 import '../../../../data/services/export/export_service.dart';
 import '../../../../data/services/import/csv_import_service.dart';
 import '../../../../domain/models/network_adapter_info.dart';
@@ -24,6 +26,7 @@ class SyslogViewModel extends ChangeNotifier {
 
   StreamSubscription? _batchSubscription;
   StreamSubscription? _statusSubscription;
+  StreamSubscription? _sharedDeviceSubscription;
   Timer? _uiThrottleTimer;
   bool _pendingThrottleRefresh = false;
 
@@ -82,6 +85,13 @@ class SyslogViewModel extends ChangeNotifier {
         notifyListeners();
       }
     });
+
+    try {
+      _sharedDeviceSubscription =
+          SharedDeviceDatabase.instance.onDatabaseChanged.listen((_) {
+        notifyListeners();
+      });
+    } catch (_) {}
 
     _refreshState();
     refreshAdapters();
@@ -314,11 +324,18 @@ class SyslogViewModel extends ChangeNotifier {
     );
   }
 
+  /// Updates or assigns a friendly name to a device by MAC address in the shared database.
+  void updateDeviceName(String mac, String newName) {
+    MacAddressHelper.updateDeviceName(mac, newName);
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _uiThrottleTimer?.cancel();
     _batchSubscription?.cancel();
     _statusSubscription?.cancel();
+    _sharedDeviceSubscription?.cancel();
     _repository.dispose();
     super.dispose();
   }

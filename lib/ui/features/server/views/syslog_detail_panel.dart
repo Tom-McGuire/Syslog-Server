@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../view_models/syslog_view_model.dart';
+import 'device_mac_chip.dart';
 
 class SyslogDetailPanel extends StatelessWidget {
   const SyslogDetailPanel({super.key});
@@ -117,6 +118,37 @@ class SyslogDetailPanel extends StatelessWidget {
                   ),
                   const SizedBox(height: 14),
                   const Divider(height: 1),
+
+                  // Detected Hardware / MAC Addresses from Network Suite
+                  if (record.detectedMacs.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Icon(Icons.devices, size: 14, color: Colors.tealAccent),
+                        const SizedBox(width: 6),
+                        const Text(
+                          'HARDWARE IDENTITY & SHARED DEVICES',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.tealAccent),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '(${record.detectedMacs.length} detected)',
+                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: record.detectedMacs.map((mac) {
+                        return DeviceMacChip(mac: mac, compact: false);
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 12),
+                    const Divider(height: 1),
+                  ],
+
                   const SizedBox(height: 12),
 
                   // Message Section

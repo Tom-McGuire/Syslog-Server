@@ -78,6 +78,21 @@ class DemoSyslogGenerator {
       port: 514,
       raw: '<185>Oct 21 19:30:35 fw01 %ASA-1-105001: ARN duplicate IP address 192.168.1.100 detected on interface inside',
     ),
+    (
+      ip: '192.168.1.1',
+      port: 514,
+      raw: '<134>1 2026-10-21T19:30:36.100Z core-sw01 dhcpd 1245 - - DHCPACK on 192.168.1.105 to 00:1A:2B:3C:4D:5E via Gi1/0/5',
+    ),
+    (
+      ip: '192.168.1.254',
+      port: 514,
+      raw: '<189>Oct 21 19:30:38 ap-corp-lobby dot1x: %DOT1X-5-SUCCESS: Authentication successful for client (00-11-22-33-44-55) on SSID Staff-WiFi',
+    ),
+    (
+      ip: '192.168.1.254',
+      port: 514,
+      raw: '<187>Oct 21 19:30:40 sw-dist-01 %DAI-4-PACKET_INSPECT: Validating ARP request from 10.0.0.88, MAC 001a.2b3c.4d5e on vlan 10',
+    ),
   ];
 
   static List<SyslogRecord> generateDemoLogs() {

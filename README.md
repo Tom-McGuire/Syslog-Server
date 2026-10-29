@@ -33,6 +33,11 @@ Designed for network engineers, system administrators, and developers who need a
   - **CSV Import**: Load CSV logs exported from this application, Kiwi Syslog, Splunk, Graylog, or raw syslog text files.
   - **Export**: One-click export to sanitized **CSV** (formula injection protected) and **JSON**.
   - **Demo Logs**: Built-in sample log generator to test the interface without external hardware.
+- **Shared Device Library Integration (Network Suite)**:
+  - Dissects hardware MAC addresses in log payloads (common in DHCP snooping, 802.1X, and firewall logs).
+  - Resolves MAC addresses to friendly custom names and IEEE OUI manufacturers via `network_suite_shared`.
+  - Interactive chips with single-click and right-click "Rename Device" dialog that syncs device identities across all suite applications via SQLite WAL.
+  - Fully resilient standalone operation: local socket and database operations run independently of shared library availability.
 - **Log Inspection & Utilities**:
   - Bottom collapsible inspection panel with formatted metadata and raw packet viewer.
   - Right-click context menu (copy message, copy raw packet, quick filter by IP or host).

@@ -1,4 +1,5 @@
 import 'package:sqlite3/sqlite3.dart';
+import '../../data/services/device/mac_address_helper.dart';
 import 'syslog_severity.dart';
 import 'syslog_facility.dart';
 
@@ -36,6 +37,9 @@ class SyslogRecord {
   final String rawPayload;
 
   DateTime get receivedAt => DateTime.fromMillisecondsSinceEpoch(receivedAtMs);
+
+  /// Unique normalized MAC addresses detected in this log entry.
+  List<String> get detectedMacs => MacAddressHelper.extractMacs('$message $rawPayload ${hostname ?? ""}');
 
   factory SyslogRecord.fromRow(Row row) {
     final facilityCode = row['facility'] as int? ?? 1;

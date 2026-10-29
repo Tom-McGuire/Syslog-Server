@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:network_suite_shared/network_suite_shared.dart';
 import 'package:provider/provider.dart';
 import 'ui/features/server/view_models/syslog_view_model.dart';
 import 'ui/features/server/views/syslog_screen.dart';
 import 'ui/theme/app_theme.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Safely initialize shared device database (standalone resilient).
+  try {
+    await SharedDeviceDatabase.instance.init();
+  } catch (e) {
+    debugPrint('Shared device database fallback: $e');
+  }
+
   runApp(const SyslogServerApp());
 }
 
