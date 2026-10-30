@@ -6,18 +6,38 @@ on:
   pull_request:
     branches: [ main ]
 
+# Force GitHub Actions runners to execute JavaScript actions using Node 24 runtime
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   analyze_and_test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          path: syslog-server
+
+      - name: Check out network_suite_shared dependency
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/network_suite_shared
+          path: network_suite_shared
+
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           cache: true
+
       - name: Install dependencies
+        working-directory: syslog-server
         run: flutter pub get
+
       - name: Analyze code
+        working-directory: syslog-server
         run: flutter analyze
+
       - name: Run test suite
+        working-directory: syslog-server
         run: flutter test
