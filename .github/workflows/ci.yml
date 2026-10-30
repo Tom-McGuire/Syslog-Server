@@ -16,14 +16,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          path: syslog-server
-
-      - name: Check out network_suite_shared dependency
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.repository_owner }}/network_suite_shared
-          path: network_suite_shared
 
       - uses: subosito/flutter-action@v2
         with:
@@ -31,13 +23,10 @@ jobs:
           cache: true
 
       - name: Install dependencies
-        working-directory: syslog-server
         run: flutter pub get
 
       - name: Analyze code
-        working-directory: syslog-server
         run: flutter analyze
 
       - name: Run test suite
-        working-directory: syslog-server
         run: flutter test

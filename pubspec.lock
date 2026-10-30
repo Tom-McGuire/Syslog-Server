@@ -331,9 +331,11 @@ packages:
   network_suite_shared:
     dependency: "direct main"
     description:
-      path: "../network_suite_shared"
-      relative: true
-    source: path
+      path: "."
+      ref: main
+      resolved-ref: "3910aa478245c61b40ce0e13d158a896a75d86bd"
+      url: "https://github.com/Tom-McGuire/network-suite-shared.git"
+    source: git
     version: "1.0.0"
   objective_c:
     dependency: transitive

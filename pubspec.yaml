@@ -43,7 +43,9 @@ dependencies:
   csv: ^8.0.0
   intl: ^0.20.3
   network_suite_shared:
-    path: ../network_suite_shared
+    git:
+      url: https://github.com/Tom-McGuire/network-suite-shared.git
+      ref: main
 
 dev_dependencies:
   flutter_test:
