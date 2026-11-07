@@ -1,8 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:network_suite_shared/network_suite_shared.dart';
+import 'package:sqlite3/sqlite3.dart';
+import 'package:syslog_server/data/services/database/syslog_database_service.dart';
 import 'package:syslog_server/data/services/device/mac_address_helper.dart';
 import 'package:syslog_server/data/services/generator/demo_syslog_generator.dart';
 import 'package:syslog_server/data/services/parser/syslog_parser.dart';
+import 'package:syslog_server/domain/models/syslog_facility.dart';
+import 'package:syslog_server/domain/models/syslog_filter.dart';
+import 'package:syslog_server/domain/models/syslog_record.dart';
+import 'package:syslog_server/domain/models/syslog_severity.dart';
 
 void main() {
   group('Shared Device Library & MAC Dissection Tests', () {
@@ -86,6 +92,49 @@ void main() {
 
       // Does not throw
       expect(() => MacAddressHelper.getCategory(testMac), returnsNormally);
+    });
+
+    test('Search filter matches records by user-assigned friendly device name', () async {
+      await SharedDeviceDatabase.instance.init(dbPath: ':memory:');
+
+      const testMac = '00:1A:2B:3C:4D:5E';
+      MacAddressHelper.updateDeviceName(testMac, 'Executive Switch');
+
+      final dbService = SyslogDatabaseService(db: sqlite3.openInMemory());
+      final r1 = SyslogRecord(
+        receivedAtMs: DateTime.now().millisecondsSinceEpoch,
+        remoteIp: '192.168.1.1',
+        remotePort: 514,
+        transport: 'UDP',
+        facility: SyslogFacility.local7,
+        severity: SyslogSeverity.informational,
+        hostname: 'sw-01',
+        message: 'Port gi1/0/1 up for $testMac',
+        rawPayload: 'Port gi1/0/1 up for $testMac',
+      );
+      final r2 = SyslogRecord(
+        receivedAtMs: DateTime.now().millisecondsSinceEpoch,
+        remoteIp: '192.168.1.2',
+        remotePort: 514,
+        transport: 'UDP',
+        facility: SyslogFacility.local7,
+        severity: SyslogSeverity.informational,
+        hostname: 'sw-02',
+        message: 'Port gi1/0/2 up for 11:22:33:44:55:66',
+        rawPayload: 'Port gi1/0/2 up for 11:22:33:44:55:66',
+      );
+
+      dbService.insertBatch([r1, r2]);
+
+      // Searching for 'Executive Switch' should find r1
+      final results = dbService.queryLogs(
+        filter: const SyslogFilterCriteria(searchQuery: 'Executive Switch'),
+      );
+
+      expect(results.length, 1);
+      expect(results.first.detectedMacs, contains(testMac));
+
+      dbService.close();
     });
   });
 }

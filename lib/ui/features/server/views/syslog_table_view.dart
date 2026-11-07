@@ -203,10 +203,13 @@ class _SyslogTableViewState extends State<SyslogTableView> {
                   onPressed: () async {
                     final result = await vm.importCsvFile(replaceExisting: true);
                     if (result != null && context.mounted) {
+                      final devicesMsg = result.updatedDevicesCount > 0
+                          ? ' and updated ${result.updatedDevicesCount} device(s) in shared database'
+                          : '';
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            'Imported ${result.importedCount} logs from CSV (${result.detectedFormat})'
+                            'Imported ${result.importedCount} logs$devicesMsg (${result.detectedFormat})'
                             '${result.skippedCount > 0 ? ' [${result.skippedCount} skipped]' : ''}',
                           ),
                           duration: const Duration(seconds: 3),
@@ -404,10 +407,19 @@ class _SyslogTableViewState extends State<SyslogTableView> {
             // Hostname
             SizedBox(
               width: widths[SyslogTableColumn.host],
-              child: Text(
-                record.hostname ?? '-',
-                style: const TextStyle(fontSize: 12),
-                overflow: TextOverflow.ellipsis,
+              child: Tooltip(
+                message: record.customDeviceName != null && record.hostname != null
+                    ? 'Device: ${record.customDeviceName}\nSyslog Host: ${record.hostname}'
+                    : (record.customDeviceName ?? record.hostname ?? 'No Hostname'),
+                child: Text(
+                  record.customDeviceName ?? record.hostname ?? '-',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: record.customDeviceName != null ? Colors.tealAccent : null,
+                    fontWeight: record.customDeviceName != null ? FontWeight.w600 : null,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
             // App / Tag
@@ -595,7 +607,7 @@ class _SyslogTableViewState extends State<SyslogTableView> {
             children: [
               Icon(Icons.copy, size: 16),
               SizedBox(width: 8),
-              Text('Copy Message'),
+              Expanded(child: Text('Copy Message', overflow: TextOverflow.ellipsis)),
             ],
           ),
         ),
@@ -605,7 +617,7 @@ class _SyslogTableViewState extends State<SyslogTableView> {
             children: [
               Icon(Icons.raw_on, size: 16),
               SizedBox(width: 8),
-              Text('Copy Raw Payload'),
+              Expanded(child: Text('Copy Raw Payload', overflow: TextOverflow.ellipsis)),
             ],
           ),
         ),
@@ -616,7 +628,7 @@ class _SyslogTableViewState extends State<SyslogTableView> {
             children: [
               const Icon(Icons.filter_alt, size: 16),
               const SizedBox(width: 8),
-              Text('Filter by IP: ${record.remoteIp}'),
+              Expanded(child: Text('Filter by IP: ${record.remoteIp}', overflow: TextOverflow.ellipsis)),
             ],
           ),
         ),
@@ -627,7 +639,7 @@ class _SyslogTableViewState extends State<SyslogTableView> {
               children: [
                 const Icon(Icons.dns, size: 16),
                 const SizedBox(width: 8),
-                Text('Filter by Host: ${record.hostname}'),
+                Expanded(child: Text('Filter by Host: ${record.hostname}', overflow: TextOverflow.ellipsis)),
               ],
             ),
           ),
@@ -640,7 +652,7 @@ class _SyslogTableViewState extends State<SyslogTableView> {
                 children: [
                   const Icon(Icons.edit_note, size: 16, color: Colors.tealAccent),
                   const SizedBox(width: 8),
-                  Text('Rename Device ($mac)'),
+                  Expanded(child: Text('Rename Device ($mac)', overflow: TextOverflow.ellipsis)),
                 ],
               ),
             ),
@@ -650,7 +662,7 @@ class _SyslogTableViewState extends State<SyslogTableView> {
                 children: [
                   const Icon(Icons.filter_alt, size: 16),
                   const SizedBox(width: 8),
-                  Text('Filter by MAC: $mac'),
+                  Expanded(child: Text('Filter by MAC: $mac', overflow: TextOverflow.ellipsis)),
                 ],
               ),
             ),
@@ -660,7 +672,7 @@ class _SyslogTableViewState extends State<SyslogTableView> {
                 children: [
                   const Icon(Icons.copy, size: 16),
                   const SizedBox(width: 8),
-                  Text('Copy MAC: $mac'),
+                  Expanded(child: Text('Copy MAC: $mac', overflow: TextOverflow.ellipsis)),
                 ],
               ),
             ),

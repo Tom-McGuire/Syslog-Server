@@ -63,5 +63,40 @@ void main() {
       expect(match.facility, SyslogFacility.local0);
       expect(match.severity, SyslogSeverity.informational);
     });
+
+    test('Receives and parses live TCP syslog streams into SQLite', () async {
+      const tcpTestPort = 15515;
+      await repository.startServer(
+        port: tcpTestPort,
+        bindAddress: '127.0.0.1',
+        enableUdp: false,
+        enableTcp: true,
+      );
+
+      final completer = Completer<void>();
+      final sub = repository.onBatchInserted.listen((batch) {
+        if (batch.any((r) => r.message == 'Live TCP syslog frame') && !completer.isCompleted) {
+          completer.complete();
+        }
+      });
+
+      // Connect via TCP client socket
+      final socket = await Socket.connect('127.0.0.1', tcpTestPort);
+      const testLine = '<187>1 2026-11-06T14:30:00Z core-router ospfd 450 - - Live TCP syslog frame\n';
+      socket.write(testLine);
+      await socket.flush();
+      await socket.close();
+
+      await completer.future.timeout(const Duration(seconds: 3));
+      await sub.cancel();
+
+      final logs = repository.getLogsPaged(filter: const SyslogFilterCriteria());
+      final match = logs.firstWhere((l) => l.message == 'Live TCP syslog frame');
+      expect(match.transport, 'TCP');
+      expect(match.remoteIp, '127.0.0.1');
+      expect(match.hostname, 'core-router');
+      expect(match.appName, 'ospfd');
+      expect(match.severity, SyslogSeverity.error);
+    });
   });
 }

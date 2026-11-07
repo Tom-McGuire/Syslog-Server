@@ -43,6 +43,16 @@ class MacAddressHelper {
     return null;
   }
 
+  /// Returns the custom user-assigned name for [mac] if one exists in the shared database.
+  /// Returns `null` if no custom name has been assigned or if database is uninitialized.
+  static String? getCustomName(String mac) {
+    final device = getDevice(mac);
+    if (device != null && device.name.trim().isNotEmpty) {
+      return device.name.trim();
+    }
+    return null;
+  }
+
   /// Resolves the most friendly display name for a given [mac].
   ///
   /// Priority:

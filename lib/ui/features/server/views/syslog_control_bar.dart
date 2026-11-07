@@ -418,10 +418,13 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
 
     final result = await vm.importCsvFile(replaceExisting: replaceExisting);
     if (result != null && context.mounted) {
+      final devicesMsg = result.updatedDevicesCount > 0
+          ? ' and updated ${result.updatedDevicesCount} device(s) in shared database'
+          : '';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Imported ${result.importedCount} logs from CSV (${result.detectedFormat})'
+            'Imported ${result.importedCount} logs$devicesMsg (${result.detectedFormat})'
             '${result.skippedCount > 0 ? ' [${result.skippedCount} skipped]' : ''}',
           ),
           duration: const Duration(seconds: 3),

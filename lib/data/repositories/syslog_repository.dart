@@ -5,6 +5,7 @@ import '../../domain/models/syslog_filter.dart';
 import '../../domain/models/syslog_record.dart';
 import '../../domain/models/syslog_severity.dart';
 import '../services/database/syslog_database_service.dart';
+import '../services/device/mac_address_helper.dart';
 import '../services/generator/demo_syslog_generator.dart';
 import '../services/import/csv_import_service.dart';
 import '../services/listener/syslog_listener_service.dart';
@@ -122,8 +123,30 @@ class SyslogRepository {
       }
     }
 
+    // Update shared devices database with imported device name mappings
+    int updatedDevices = 0;
+    if (result.deviceMappings.isNotEmpty) {
+      for (final entry in result.deviceMappings.entries) {
+        final mac = entry.key;
+        final name = entry.value;
+        final existing = MacAddressHelper.getDevice(mac);
+        if (existing == null || existing.name != name) {
+          MacAddressHelper.updateDeviceName(mac, name);
+          updatedDevices++;
+        }
+      }
+    }
+
     _loadedFileName = fileName ?? 'imported_logs.csv';
-    return result;
+    return CsvImportResult(
+      records: result.records,
+      totalLines: result.totalLines,
+      importedCount: result.importedCount,
+      skippedCount: result.skippedCount,
+      detectedFormat: result.detectedFormat,
+      updatedDevicesCount: updatedDevices,
+      deviceMappings: result.deviceMappings,
+    );
   }
 
   void closeLoadedFile() {

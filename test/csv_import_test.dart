@@ -1,12 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:network_suite_shared/network_suite_shared.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:syslog_server/data/repositories/syslog_repository.dart';
 import 'package:syslog_server/data/services/database/syslog_database_service.dart';
+import 'package:syslog_server/data/services/device/mac_address_helper.dart';
 import 'package:syslog_server/data/services/export/export_service.dart';
 import 'package:syslog_server/data/services/generator/demo_syslog_generator.dart';
 import 'package:syslog_server/data/services/import/csv_import_service.dart';
 import 'package:syslog_server/domain/models/syslog_facility.dart';
 import 'package:syslog_server/domain/models/syslog_filter.dart';
+import 'package:syslog_server/domain/models/syslog_record.dart';
 import 'package:syslog_server/domain/models/syslog_severity.dart';
 
 void main() {
@@ -114,6 +117,115 @@ void main() {
       final records = repo.getLogsPaged(filter: const SyslogFilterCriteria());
       expect(records.length, 2);
       expect(records.any((r) => r.message.contains('502 Bad Gateway')), isTrue);
+
+      repo.dispose();
+    });
+
+    test('Export and import preserves manually entered device friendly names and updates SharedDeviceDatabase', () async {
+      await SharedDeviceDatabase.instance.init(dbPath: ':memory:');
+
+      const testMac = '00:1A:2B:3C:4D:5E';
+      const friendlyName = 'Main Core Switch 01';
+
+      // Manually register device name
+      MacAddressHelper.updateDeviceName(testMac, friendlyName);
+      expect(MacAddressHelper.getCustomName(testMac), friendlyName);
+
+      // Create record referencing this device MAC
+      final record = SyslogRecord(
+        receivedAtMs: DateTime.now().millisecondsSinceEpoch,
+        remoteIp: '192.168.1.1',
+        remotePort: 514,
+        transport: 'UDP',
+        facility: SyslogFacility.local7,
+        severity: SyslogSeverity.informational,
+        hostname: 'sw-core-01',
+        message: 'DHCPACK on 192.168.1.100 to $testMac via Gi1/0/1',
+        rawPayload: '<189>1 2026-10-24T10:00:00Z sw-core-01 dhcpd - - - DHCPACK on 192.168.1.100 to $testMac via Gi1/0/1',
+      );
+
+      expect(record.customDeviceName, friendlyName);
+
+      // Export to CSV
+      final csvString = ExportService.logsToCsv([record]);
+      expect(csvString, contains('Device Name'));
+      expect(csvString, contains('MAC Address'));
+      expect(csvString, contains(friendlyName));
+      expect(csvString, contains(testMac));
+
+      // Now reset the device name in database to verify import updates it
+      SharedDeviceDatabase.instance.updateDeviceName(testMac, 'Old Switch');
+      expect(MacAddressHelper.getCustomName(testMac), 'Old Switch');
+
+      // Import the CSV via SyslogRepository
+      final dbService = SyslogDatabaseService(db: sqlite3.openInMemory());
+      final repo = SyslogRepository(databaseService: dbService);
+
+      final importResult = await repo.importCsvContent(
+        csvString,
+        fileName: 'export_with_names.csv',
+      );
+
+      expect(importResult.importedCount, 1);
+      expect(importResult.updatedDevicesCount, 1);
+      expect(importResult.deviceMappings[testMac], friendlyName);
+
+      // SharedDeviceDatabase should now be updated!
+      expect(MacAddressHelper.getCustomName(testMac), friendlyName);
+
+      // The imported record should also resolve customDeviceName
+      final importedRecords = repo.getLogsPaged(filter: const SyslogFilterCriteria());
+      expect(importedRecords.length, 1);
+      expect(importedRecords.first.customDeviceName, friendlyName);
+
+      repo.dispose();
+    });
+
+    test('Export and import via JSON updates SharedDeviceDatabase and restores logs', () async {
+      await SharedDeviceDatabase.instance.init(dbPath: ':memory:');
+
+      const testMac = '00:11:22:33:44:55';
+      const friendlyName = 'Lobby Access Point';
+
+      MacAddressHelper.updateDeviceName(testMac, friendlyName);
+
+      final record = SyslogRecord(
+        receivedAtMs: DateTime.now().millisecondsSinceEpoch,
+        remoteIp: '192.168.1.254',
+        remotePort: 514,
+        transport: 'UDP',
+        facility: SyslogFacility.local7,
+        severity: SyslogSeverity.notice,
+        hostname: 'ap-lobby-01',
+        message: 'Client connected: $testMac',
+        rawPayload: 'Client connected: $testMac',
+      );
+
+      final jsonString = ExportService.logsToJson([record]);
+      expect(jsonString, contains('"device_name": "$friendlyName"'));
+      expect(jsonString, contains('"mac_address": "$testMac"'));
+
+      // Remove device from database
+      SharedDeviceDatabase.instance.deleteDevice(testMac);
+      expect(SharedDeviceDatabase.instance.getDeviceByMac(testMac), isNull);
+
+      // Import JSON
+      final dbService = SyslogDatabaseService(db: sqlite3.openInMemory());
+      final repo = SyslogRepository(databaseService: dbService);
+
+      final importResult = await repo.importCsvContent(
+        jsonString,
+        fileName: 'export.json',
+      );
+
+      expect(importResult.importedCount, 1);
+      expect(importResult.detectedFormat, 'JSON');
+      expect(importResult.updatedDevicesCount, 1);
+
+      // Verified device was re-created in SharedDeviceDatabase
+      final dev = SharedDeviceDatabase.instance.getDeviceByMac(testMac);
+      expect(dev, isNotNull);
+      expect(dev!.name, friendlyName);
 
       repo.dispose();
     });

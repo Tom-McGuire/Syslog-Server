@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:csv/csv.dart';
 import '../../../domain/models/syslog_facility.dart';
 import '../../../domain/models/syslog_record.dart';
 import '../../../domain/models/syslog_severity.dart';
+import '../device/mac_address_helper.dart';
 import '../parser/syslog_parser.dart';
 
 class CsvImportResult {
@@ -11,6 +13,8 @@ class CsvImportResult {
     required this.importedCount,
     required this.skippedCount,
     this.detectedFormat = 'CSV',
+    this.updatedDevicesCount = 0,
+    this.deviceMappings = const {},
   });
 
   final List<SyslogRecord> records;
@@ -18,18 +22,42 @@ class CsvImportResult {
   final int importedCount;
   final int skippedCount;
   final String detectedFormat;
+  final int updatedDevicesCount;
+  final Map<String, String> deviceMappings;
 }
 
 class CsvImportService {
-  /// Parse CSV string into a list of [SyslogRecord]s.
+  /// Parse CSV or JSON string into a list of [SyslogRecord]s and extract any device name mappings.
   static CsvImportResult parseCsv(String csvContent) {
-    if (csvContent.trim().isEmpty) {
+    final trimmed = csvContent.trim();
+    if (trimmed.isEmpty) {
       return const CsvImportResult(
         records: [],
         totalLines: 0,
         importedCount: 0,
         skippedCount: 0,
       );
+    }
+
+    // Check if content is formatted as JSON array or object
+    if ((trimmed.startsWith('[') && trimmed.endsWith(']')) ||
+        (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+      try {
+        final decoded = jsonDecode(trimmed);
+        if (decoded is List) {
+          return _parseJsonList(decoded);
+        } else if (decoded is Map<String, dynamic>) {
+          if (decoded['logs'] is List) {
+            return _parseJsonList(decoded['logs'] as List);
+          } else if (decoded['records'] is List) {
+            return _parseJsonList(decoded['records'] as List);
+          } else {
+            return _parseJsonList([decoded]);
+          }
+        }
+      } catch (_) {
+        // Fall back to standard CSV parsing if jsonDecode fails
+      }
     }
 
     final rows = const CsvDecoder().convert(csvContent);
@@ -47,6 +75,7 @@ class CsvImportService {
     final headerIndexMap = _detectHeaders(firstRow);
 
     final records = <SyslogRecord>[];
+    final deviceMappings = <String, String>{};
     int skippedCount = 0;
     final int startRowIndex = headerIndexMap.isNotEmpty ? 1 : 0;
     final String format = headerIndexMap.isNotEmpty ? 'Structured CSV' : 'Raw Lines CSV';
@@ -62,9 +91,23 @@ class CsvImportService {
       try {
         if (headerIndexMap.isNotEmpty) {
           // Structured row parsing using mapped header indices
-          final record = _parseStructuredRow(row, headerIndexMap, nowMs - (rows.length - i) * 10);
+          final parsed = _parseStructuredRow(row, headerIndexMap, nowMs - (rows.length - i) * 10);
+          final record = parsed.record;
           if (record != null) {
             records.add(record);
+
+            final devName = parsed.deviceName;
+            if (devName != null && devName.trim().isNotEmpty) {
+              final macs = <String>{};
+              if (parsed.macAddress != null && parsed.macAddress!.isNotEmpty) {
+                macs.addAll(MacAddressHelper.extractMacs(parsed.macAddress!));
+              }
+              macs.addAll(record.detectedMacs);
+
+              for (final mac in macs) {
+                deviceMappings[mac] = devName.trim();
+              }
+            }
           } else {
             skippedCount++;
           }
@@ -95,6 +138,57 @@ class CsvImportService {
       importedCount: records.length,
       skippedCount: skippedCount,
       detectedFormat: format,
+      deviceMappings: deviceMappings,
+    );
+  }
+
+  static CsvImportResult _parseJsonList(List<dynamic> list) {
+    final records = <SyslogRecord>[];
+    final deviceMappings = <String, String>{};
+    int skippedCount = 0;
+
+    for (final item in list) {
+      if (item is! Map<String, dynamic>) {
+        skippedCount++;
+        continue;
+      }
+
+      try {
+        final record = SyslogRecord.fromMap(item);
+        records.add(record);
+
+        final devName = (item['device_name'] as String?)?.trim();
+        if (devName != null && devName.isNotEmpty) {
+          final macs = <String>{};
+          final explicitMac = item['mac_address'] as String?;
+          final explicitMacs = item['detected_macs'];
+
+          if (explicitMac != null && explicitMac.trim().isNotEmpty) {
+            macs.addAll(MacAddressHelper.extractMacs(explicitMac));
+          }
+          if (explicitMacs is List) {
+            for (final m in explicitMacs) {
+              macs.addAll(MacAddressHelper.extractMacs(m.toString()));
+            }
+          }
+          macs.addAll(record.detectedMacs);
+
+          for (final mac in macs) {
+            deviceMappings[mac] = devName;
+          }
+        }
+      } catch (_) {
+        skippedCount++;
+      }
+    }
+
+    return CsvImportResult(
+      records: records,
+      totalLines: list.length,
+      importedCount: records.length,
+      skippedCount: skippedCount,
+      detectedFormat: 'JSON',
+      deviceMappings: deviceMappings,
     );
   }
 
@@ -118,13 +212,17 @@ class CsvImportService {
         map['remotePort'] = i;
       } else if (_matches(h, ['transport', 'proto', 'protocol']) && !map.containsKey('transport')) {
         map['transport'] = i;
+      } else if (_matches(h, ['devicename', 'friendlyname', 'customname', 'devicealias']) && !map.containsKey('deviceName')) {
+        map['deviceName'] = i;
+      } else if (_matches(h, ['macaddress', 'mac', 'hardwareaddress', 'hwaddr', 'ethernet']) && !map.containsKey('macAddress')) {
+        map['macAddress'] = i;
       } else if (_matches(h, ['hostname', 'host', 'device', 'sourcename', 'node', 'machinename']) && !map.containsKey('hostname')) {
         map['hostname'] = i;
       } else if (_matches(h, ['appname', 'app', 'tag', 'program', 'process']) && !map.containsKey('appName')) {
         map['appName'] = i;
       } else if (_matches(h, ['procid', 'pid', 'processid']) && !map.containsKey('procId')) {
         map['procId'] = i;
-      } else if (_matches(h, ['msgid', 'eventid', 'msgid']) && !map.containsKey('msgId')) {
+      } else if (_matches(h, ['msgid', 'eventid']) && !map.containsKey('msgId')) {
         map['msgId'] = i;
       } else if (_matches(h, ['rawpayload', 'raw', 'packet', 'rawmessage']) && !map.containsKey('rawPayload')) {
         map['rawPayload'] = i;
@@ -132,7 +230,7 @@ class CsvImportService {
     }
 
     // Must have at least 1 recognizable core field to be considered a header
-    final recognizedKeys = {'message', 'severity', 'timestamp', 'hostname', 'remoteIp'};
+    final recognizedKeys = {'message', 'severity', 'timestamp', 'hostname', 'remoteIp', 'deviceName', 'macAddress'};
     if (map.keys.any(recognizedKeys.contains)) {
       return map;
     }
@@ -161,7 +259,7 @@ class CsvImportService {
     return (val != null && val.isNotEmpty) ? val : null;
   }
 
-  static SyslogRecord? _parseStructuredRow(
+  static ({SyslogRecord? record, String? deviceName, String? macAddress}) _parseStructuredRow(
     List<dynamic> row,
     Map<String, int> headerMap,
     int defaultTimeMs,
@@ -176,7 +274,9 @@ class CsvImportService {
     }
 
     final message = getCol('message') ?? getCol('rawPayload');
-    if (message == null && row.isEmpty) return null;
+    if (message == null && row.isEmpty) {
+      return (record: null, deviceName: null, macAddress: null);
+    }
 
     final rawPayload = getCol('rawPayload') ?? message ?? row.join(' ');
 
@@ -197,11 +297,17 @@ class CsvImportService {
     final remotePort = int.tryParse(portStr ?? '') ?? 514;
     final transport = getCol('transport') ?? 'CSV';
     final hostname = getCol('hostname');
+    final deviceName = getCol('deviceName');
+    final macAddress = getCol('macAddress');
     final appName = getCol('appName');
     final procId = getCol('procId');
     final msgId = getCol('msgId');
 
-    return SyslogRecord(
+    final effectiveHostname = (hostname != null && hostname.isNotEmpty)
+        ? hostname
+        : deviceName;
+
+    final record = SyslogRecord(
       receivedAtMs: receivedAtMs,
       remoteIp: remoteIp,
       remotePort: remotePort,
@@ -209,13 +315,15 @@ class CsvImportService {
       facility: facility,
       severity: severity,
       timestampStr: originalTsStr,
-      hostname: hostname,
+      hostname: effectiveHostname,
       appName: appName,
       procId: procId,
       msgId: msgId,
       message: message ?? rawPayload,
       rawPayload: rawPayload,
     );
+
+    return (record: record, deviceName: deviceName, macAddress: macAddress);
   }
 
   static SyslogSeverity _parseSeverity(String? value) {

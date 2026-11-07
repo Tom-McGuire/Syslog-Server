@@ -39,7 +39,7 @@ class DeviceMacChip extends StatelessWidget {
             children: [
               const Icon(Icons.edit, size: 16),
               const SizedBox(width: 8),
-              Text('Rename Device ($mac)'),
+              Expanded(child: Text('Rename Device ($mac)', overflow: TextOverflow.ellipsis)),
             ],
           ),
         ),
@@ -49,7 +49,7 @@ class DeviceMacChip extends StatelessWidget {
             children: [
               const Icon(Icons.filter_alt, size: 16),
               const SizedBox(width: 8),
-              Text('Filter Logs by MAC ($mac)'),
+              Expanded(child: Text('Filter Logs by MAC ($mac)', overflow: TextOverflow.ellipsis)),
             ],
           ),
         ),
@@ -60,7 +60,7 @@ class DeviceMacChip extends StatelessWidget {
             children: [
               Icon(Icons.copy, size: 16),
               SizedBox(width: 8),
-              Text('Copy MAC Address'),
+              Expanded(child: Text('Copy MAC Address', overflow: TextOverflow.ellipsis)),
             ],
           ),
         ),
@@ -71,7 +71,7 @@ class DeviceMacChip extends StatelessWidget {
               children: [
                 const Icon(Icons.badge, size: 16),
                 const SizedBox(width: 8),
-                Text('Copy Name: $displayName'),
+                Expanded(child: Text('Copy Name: $displayName', overflow: TextOverflow.ellipsis)),
               ],
             ),
           ),

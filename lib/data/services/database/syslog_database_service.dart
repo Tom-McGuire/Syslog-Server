@@ -1,3 +1,4 @@
+import 'package:network_suite_shared/network_suite_shared.dart';
 import 'package:sqlite3/sqlite3.dart';
 import '../../../domain/models/syslog_facility.dart';
 import '../../../domain/models/syslog_filter.dart';
@@ -201,11 +202,31 @@ class SyslogDatabaseService {
 
     // Search query matches message, hostname, app_name, or remote_ip with LIKE wildcard escaping
     if (filter.searchQuery.trim().isNotEmpty) {
-      final q = '%${_escapeLike(filter.searchQuery.trim())}%';
-      clauses.add(
-        "(message LIKE ? ESCAPE '\\' OR hostname LIKE ? ESCAPE '\\' OR app_name LIKE ? ESCAPE '\\' OR remote_ip LIKE ? ESCAPE '\\')",
-      );
-      params.addAll([q, q, q, q]);
+      final queryText = filter.searchQuery.trim();
+      final q = '%${_escapeLike(queryText)}%';
+      final searchClauses = <String>[
+        "message LIKE ? ESCAPE '\\'",
+        "hostname LIKE ? ESCAPE '\\'",
+        "app_name LIKE ? ESCAPE '\\'",
+        "remote_ip LIKE ? ESCAPE '\\'",
+      ];
+      final searchParams = <dynamic>[q, q, q, q];
+
+      // Also match MAC addresses of any devices in SharedDeviceDatabase whose friendly name matches query
+      try {
+        if (SharedDeviceDatabase.instance.isInitialized) {
+          final matchingDevices = SharedDeviceDatabase.instance.getAllDevices(query: queryText);
+          for (final device in matchingDevices) {
+            searchClauses.add("message LIKE ? ESCAPE '\\'");
+            searchClauses.add("raw_payload LIKE ? ESCAPE '\\'");
+            final macPattern = '%${_escapeLike(device.macAddress)}%';
+            searchParams.addAll([macPattern, macPattern]);
+          }
+        }
+      } catch (_) {}
+
+      clauses.add('(${searchClauses.join(' OR ')})');
+      params.addAll(searchParams);
     }
 
     // Severity filter

@@ -29,6 +29,7 @@ class SyslogViewModel extends ChangeNotifier {
   StreamSubscription? _sharedDeviceSubscription;
   Timer? _uiThrottleTimer;
   bool _pendingThrottleRefresh = false;
+  bool _isDisposed = false;
 
   List<SyslogRecord> _logs = [];
   SyslogRecord? _selectedRecord;
@@ -104,6 +105,7 @@ class SyslogViewModel extends ChangeNotifier {
     }
 
     _uiThrottleTimer = Timer(const Duration(milliseconds: 250), () {
+      if (_isDisposed) return;
       if (_pendingThrottleRefresh) {
         _pendingThrottleRefresh = false;
         _refreshState();
@@ -113,6 +115,7 @@ class SyslogViewModel extends ChangeNotifier {
 
   Future<void> refreshAdapters() async {
     final list = await _repository.getNetworkAdapters();
+    if (_isDisposed) return;
     _adapters = list;
     if (!_adapters.contains(_selectedAdapter)) {
       _selectedAdapter = NetworkAdapterInfo.all;
@@ -139,7 +142,7 @@ class SyslogViewModel extends ChangeNotifier {
   }
 
   Future<void> loadMoreLogs() async {
-    if (_isLoadingMore || !hasMoreLogs) return;
+    if (_isLoadingMore || !hasMoreLogs || _isDisposed) return;
 
     _isLoadingMore = true;
     notifyListeners();
@@ -153,7 +156,9 @@ class SyslogViewModel extends ChangeNotifier {
       _logs.addAll(nextBatch);
     } finally {
       _isLoadingMore = false;
-      notifyListeners();
+      if (!_isDisposed) {
+        notifyListeners();
+      }
     }
   }
 
@@ -260,7 +265,7 @@ class SyslogViewModel extends ChangeNotifier {
     try {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['csv', 'txt', 'log'],
+        allowedExtensions: ['csv', 'txt', 'log', 'json'],
       );
 
       if (result.isEmpty) return null;
@@ -332,6 +337,7 @@ class SyslogViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
+    _isDisposed = true;
     _uiThrottleTimer?.cancel();
     _batchSubscription?.cancel();
     _statusSubscription?.cancel();

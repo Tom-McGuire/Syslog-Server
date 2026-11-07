@@ -32,25 +32,33 @@ class ExportService {
         'Severity',
         'Facility',
         'Hostname',
+        'Device Name',
+        'MAC Address',
         'App / Tag',
         'PID',
         'Message',
         'Raw Payload',
       ],
-      ...logs.map((r) => [
-            r.id ?? '',
-            r.receivedAt.toIso8601String(),
-            sanitizeForCsv(r.remoteIp),
-            r.remotePort,
-            sanitizeForCsv(r.transport),
-            sanitizeForCsv(r.severity.label),
-            sanitizeForCsv(r.facility.nameStr),
-            sanitizeForCsv(r.hostname),
-            sanitizeForCsv(r.appName),
-            sanitizeForCsv(r.procId),
-            sanitizeForCsv(r.message),
-            sanitizeForCsv(r.rawPayload),
-          ]),
+      ...logs.map((r) {
+        final customName = r.customDeviceName;
+        final macStr = r.detectedMacs.join('; ');
+        return [
+          r.id ?? '',
+          r.receivedAt.toIso8601String(),
+          sanitizeForCsv(r.remoteIp),
+          r.remotePort,
+          sanitizeForCsv(r.transport),
+          sanitizeForCsv(r.severity.label),
+          sanitizeForCsv(r.facility.nameStr),
+          sanitizeForCsv(r.hostname),
+          sanitizeForCsv(customName),
+          sanitizeForCsv(macStr),
+          sanitizeForCsv(r.appName),
+          sanitizeForCsv(r.procId),
+          sanitizeForCsv(r.message),
+          sanitizeForCsv(r.rawPayload),
+        ];
+      }),
     ];
 
     return Csv().encode(rows);

@@ -6,6 +6,7 @@ import 'package:syslog_server/data/repositories/syslog_repository.dart';
 import 'package:syslog_server/data/services/database/syslog_database_service.dart';
 import 'package:syslog_server/data/services/export/export_service.dart';
 import 'package:syslog_server/data/services/import/csv_import_service.dart';
+import 'package:syslog_server/data/services/listener/syslog_listener_service.dart';
 import 'package:syslog_server/data/services/parser/syslog_parser.dart';
 import 'package:syslog_server/domain/models/syslog_facility.dart';
 import 'package:syslog_server/domain/models/syslog_filter.dart';
@@ -187,6 +188,46 @@ void main() {
       expect(closedOrError, isTrue);
 
       client.destroy();
+      repo.dispose();
+    });
+
+    test('TCP listener caps line length at maxTcpLineLength to prevent memory exhaustion', () async {
+      final dbService = SyslogDatabaseService(db: sqlite3.openInMemory());
+      final repo = SyslogRepository(databaseService: dbService);
+      const testPort = 15516;
+
+      await repo.startServer(
+        port: testPort,
+        bindAddress: '127.0.0.1',
+        enableUdp: false,
+        enableTcp: true,
+      );
+
+      final batchCompleter = Completer<void>();
+      final sub = repo.onBatchInserted.listen((batch) {
+        if (!batchCompleter.isCompleted) {
+          batchCompleter.complete();
+        }
+      });
+
+      final client = await Socket.connect('127.0.0.1', testPort);
+      // Send 70,000 'A's without any newline delimiter
+      final longPayload = 'A' * 70000;
+      client.write(longPayload);
+      await client.flush();
+
+      // Because maxTcpLineLength is 65536, the buffer should automatically flush the first 65536 bytes
+      await batchCompleter.future.timeout(const Duration(seconds: 4));
+      await sub.cancel();
+
+      final logs = repo.getLogsPaged(filter: const SyslogFilterCriteria());
+      expect(logs.isNotEmpty, isTrue);
+      // The first flushed chunk has length 65536
+      expect(logs.first.message.length, SyslogListenerService.maxTcpLineLength);
+
+      await client.close();
+      client.destroy();
+      await repo.stopServer();
       repo.dispose();
     });
   });

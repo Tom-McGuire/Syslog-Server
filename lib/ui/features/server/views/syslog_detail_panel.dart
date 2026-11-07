@@ -109,7 +109,14 @@ class SyslogDetailPanel extends StatelessWidget {
                     children: [
                       _buildMetaItem('Source IP', '${record.remoteIp}:${record.remotePort} (${record.transport})'),
                       _buildMetaItem('Facility', '${record.facility.nameStr} (${record.facility.code})'),
-                      _buildMetaItem('Hostname', record.hostname ?? 'None'),
+                      _buildMetaItem(
+                        'Hostname',
+                        record.customDeviceName != null
+                            ? (record.hostname != null
+                                ? '${record.customDeviceName} [Syslog: ${record.hostname}]'
+                                : record.customDeviceName!)
+                            : (record.hostname ?? 'None'),
+                      ),
                       _buildMetaItem('App / Tag', record.appName ?? 'None'),
                       if (record.procId != null) _buildMetaItem('PID', record.procId!),
                       if (record.msgId != null) _buildMetaItem('Msg ID', record.msgId!),
