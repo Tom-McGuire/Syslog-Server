@@ -213,5 +213,86 @@ void main() {
       expect(viewModel.logs.length, 1500);
       expect(viewModel.hasMoreLogs, isFalse);
     });
+
+    test('Auto-Detected toggle, device filtering, and visibility controls', () {
+      expect(viewModel.showAutoDetected, isFalse);
+
+      viewModel.setShowAutoDetected(true);
+      expect(viewModel.showAutoDetected, isTrue);
+
+      viewModel.loadDemoLogs();
+      final autoSources = viewModel.autoDetectedSources;
+      expect(autoSources.isNotEmpty, isTrue);
+
+      // Select device key filter
+      final targetKey = autoSources.first;
+      viewModel.toggleDeviceFilter(targetKey);
+      expect(viewModel.selectedDeviceKeys.contains(targetKey), isTrue);
+      expect(viewModel.filter.hasActiveFilter, isTrue);
+
+      // Verify filtered logs only match targetKey
+      for (final log in viewModel.logs) {
+        expect(log.remoteIp == targetKey || log.hostname == targetKey, isTrue);
+      }
+
+      // Clear device filters
+      viewModel.clearDeviceFilters();
+      expect(viewModel.selectedDeviceKeys, isEmpty);
+
+      // Hide device
+      viewModel.setDeviceHidden(targetKey, true);
+      expect(viewModel.hiddenDeviceKeys.contains(targetKey), isTrue);
+      expect(viewModel.autoDetectedSources.contains(targetKey), isFalse);
+
+      // Toggle visibility back
+      viewModel.toggleDeviceVisibility(targetKey);
+      expect(viewModel.hiddenDeviceKeys.contains(targetKey), isFalse);
+      expect(viewModel.autoDetectedSources.contains(targetKey), isTrue);
+
+      // Unhide all
+      viewModel.setDeviceHidden(targetKey, true);
+      viewModel.unhideAllDevices();
+      expect(viewModel.hiddenDeviceKeys, isEmpty);
+    });
+
+    test('Combining Triage and Device filters filters down logs and updates dynamic counters', () {
+      viewModel.loadDemoLogs();
+      final totalInitial = viewModel.totalLogCount;
+      expect(totalInitial, greaterThan(0));
+
+      // Select a specific device from auto-detected sources
+      viewModel.setShowAutoDetected(true);
+      final testDevice = viewModel.autoDetectedSources.first;
+      final initialDeviceCount = viewModel.deviceCounts[testDevice] ?? 0;
+      expect(initialDeviceCount, greaterThan(0));
+
+      // 1. Filter by Device
+      viewModel.toggleDeviceFilter(testDevice);
+      expect(viewModel.totalLogCount, initialDeviceCount);
+
+      // Verify Triage severity counters reflect ONLY logs for this device
+      final severityCountsForDevice = viewModel.severityCounts;
+      final sumSeverities = severityCountsForDevice.values.fold<int>(0, (a, b) => a + b);
+      expect(sumSeverities, initialDeviceCount);
+
+      // 2. Also select a Triage severity that has records
+      final availableSeverity = severityCountsForDevice.entries.firstWhere((e) => e.value > 0).key;
+      viewModel.toggleSeverity(availableSeverity);
+
+      // The total count now represents Device AND Severity combined!
+      final combinedCount = viewModel.totalLogCount;
+      expect(combinedCount, severityCountsForDevice[availableSeverity]);
+      expect(combinedCount, lessThanOrEqualTo(initialDeviceCount));
+
+      // Verify all returned logs match BOTH the selected device AND the severity
+      for (final log in viewModel.logs) {
+        expect(log.remoteIp == testDevice || log.hostname == testDevice, isTrue);
+        expect(log.severity, availableSeverity);
+      }
+
+      // Verify device counters also reflect the active severity filter
+      final deviceCountUnderSeverity = viewModel.deviceCounts[testDevice] ?? 0;
+      expect(deviceCountUnderSeverity, combinedCount);
+    });
   });
 }

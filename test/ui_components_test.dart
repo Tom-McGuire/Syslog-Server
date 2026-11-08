@@ -11,6 +11,7 @@ import 'package:syslog_server/domain/models/syslog_facility.dart';
 import 'package:syslog_server/domain/models/syslog_record.dart';
 import 'package:syslog_server/domain/models/syslog_severity.dart';
 import 'package:syslog_server/ui/features/server/view_models/syslog_view_model.dart';
+import 'package:syslog_server/ui/features/server/views/device_filter_management_dialog.dart';
 import 'package:syslog_server/ui/features/server/views/device_mac_chip.dart';
 import 'package:syslog_server/ui/features/server/views/rename_device_dialog.dart';
 import 'package:syslog_server/ui/features/server/views/syslog_control_bar.dart';
@@ -230,6 +231,7 @@ void main() {
       // Tap Clear
       final clearButton = find.text('Clear');
       expect(clearButton, findsOneWidget);
+      await tester.ensureVisible(clearButton);
       await tester.tap(clearButton);
       await tester.pumpAndSettle();
 
@@ -371,11 +373,90 @@ void main() {
       // Open Export Popup Menu
       final exportBtn = find.byTooltip('Export Logs');
       expect(exportBtn, findsOneWidget);
+      await tester.ensureVisible(exportBtn);
       await tester.tap(exportBtn);
       await tester.pumpAndSettle();
 
       expect(find.text('Export as CSV'), findsOneWidget);
       expect(find.text('Export as JSON'), findsOneWidget);
+    });
+
+    testWidgets('SyslogFilterBar renders Device row and toggles Auto-Detected sources', (tester) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      const labeledMac = '00:1A:2B:3C:4D:5E';
+      MacAddressHelper.updateDeviceName(labeledMac, 'Core Distribution Switch');
+      viewModel.loadDemoLogs();
+
+      await tester.pumpWidget(
+        createTestApp(
+          viewModel: viewModel,
+          child: const SyslogFilterBar(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Device row header
+      expect(find.text('Devices'), findsOneWidget);
+      expect(find.text('Add Device'), findsOneWidget);
+
+      // Known labeled device appears
+      final deviceChip = find.textContaining('Core Distribution Switch');
+      expect(deviceChip, findsOneWidget);
+
+      // Tap to filter by device
+      await tester.tap(deviceChip);
+      await tester.pumpAndSettle();
+      expect(viewModel.selectedDeviceKeys.contains(labeledMac), isTrue);
+
+      // Secondary tap opens context menu
+      await tester.tap(deviceChip, buttons: kSecondaryMouseButton);
+      await tester.pumpAndSettle();
+      expect(find.text('Hide from Device Filters'), findsOneWidget);
+      expect(find.text('Copy "$labeledMac"'), findsOneWidget);
+
+      // Tap Hide
+      await tester.tap(find.text('Hide from Device Filters'));
+      await tester.pumpAndSettle();
+      expect(viewModel.hiddenDeviceKeys.contains(labeledMac), isTrue);
+
+      // Toggle Auto-Detected switch
+      final autoDetectedSwitch = find.byType(Switch).first;
+      await tester.tap(autoDetectedSwitch);
+      await tester.pumpAndSettle();
+      expect(viewModel.showAutoDetected, isTrue);
+    });
+
+    testWidgets('DeviceFilterManagementDialog allows toggling device visibility and unhiding all', (tester) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      const testMac = '11:22:33:44:55:66';
+      MacAddressHelper.updateDeviceName(testMac, 'Edge Router Alpha');
+      viewModel.setDeviceHidden(testMac, true);
+
+      await tester.pumpWidget(
+        createTestApp(
+          viewModel: viewModel,
+          child: const DeviceFilterManagementDialog(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Manage Filter Devices'), findsOneWidget);
+      expect(find.textContaining('Edge Router Alpha'), findsOneWidget);
+      expect(find.text('Hidden'), findsWidgets);
+
+      // Unhide All button
+      final unhideAllBtn = find.textContaining('Unhide All');
+      expect(unhideAllBtn, findsOneWidget);
+      await tester.tap(unhideAllBtn);
+      await tester.pumpAndSettle();
+
+      expect(viewModel.hiddenDeviceKeys, isEmpty);
     });
   });
 }

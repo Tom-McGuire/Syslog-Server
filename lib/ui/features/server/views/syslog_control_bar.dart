@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../../domain/models/network_adapter_info.dart';
 import '../view_models/syslog_view_model.dart';
+import 'device_filter_management_dialog.dart';
 
 class SyslogControlBar extends StatefulWidget {
   const SyslogControlBar({super.key});
@@ -173,38 +174,63 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
                 // Port configuration
                 const Text('Port:', style: TextStyle(fontSize: 12, color: Colors.grey)),
                 const SizedBox(width: 6),
-                SizedBox(
-                  width: 75,
+                Container(
                   height: 32,
-                  child: TextField(
-                    controller: _portController,
-                    enabled: !isListening,
-                    keyboardType: TextInputType.number,
-                    style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                    decoration: const InputDecoration(
-                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                    ),
+                  decoration: BoxDecoration(
+                    color: isListening ? const Color(0xFF1E1E1E) : const Color(0xFF252526),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF3E3E42)),
                   ),
-                ),
-                const SizedBox(width: 6),
-
-                // Presets dropdown
-                if (!isListening)
-                  PopupMenuButton<int>(
-                    tooltip: 'Port presets',
-                    icon: const Icon(Icons.arrow_drop_down, size: 20),
-                    onSelected: (port) {
-                      setState(() {
-                        _portController.text = port.toString();
-                      });
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(value: 514, child: Text('514 (Standard Syslog)')),
-                      const PopupMenuItem(value: 1514, child: Text('1514 (Unprivileged Syslog)')),
-                      const PopupMenuItem(value: 5140, child: Text('5140 (Alternative Syslog)')),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 54,
+                        child: TextField(
+                          controller: _portController,
+                          enabled: !isListening,
+                          keyboardType: TextInputType.number,
+                          textAlignVertical: TextAlignVertical.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontFamily: 'monospace',
+                            color: isListening ? Colors.grey : Colors.white,
+                          ),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                        ),
+                      ),
+                      if (!isListening)
+                        PopupMenuButton<int>(
+                          tooltip: 'Port presets',
+                          padding: EdgeInsets.zero,
+                          child: const Padding(
+                            padding: EdgeInsets.only(right: 6, left: 2),
+                            child: Icon(Icons.arrow_drop_down, size: 18, color: Colors.grey),
+                          ),
+                          onSelected: (port) {
+                            setState(() {
+                              _portController.text = port.toString();
+                            });
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(value: 514, child: Text('514 (Standard Syslog)')),
+                            const PopupMenuItem(value: 1514, child: Text('1514 (Unprivileged Syslog)')),
+                            const PopupMenuItem(value: 5140, child: Text('5140 (Alternative Syslog)')),
+                          ],
+                        )
+                      else
+                        const SizedBox(width: 8),
                     ],
                   ),
-                const SizedBox(width: 12),
+                ),
+                const SizedBox(width: 14),
 
                 // Protocol Checkboxes
                 Row(
@@ -301,6 +327,17 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
                 ),
                 const SizedBox(width: 8),
 
+                // Custom Library Button (Matching Packet Inspector)
+                OutlinedButton.icon(
+                  onPressed: () => DeviceFilterManagementDialog.show(context),
+                  icon: const Icon(Icons.menu_book, size: 16),
+                  label: const Text('Custom Library'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                ),
+                const SizedBox(width: 8),
+
                 // Clear Logs Button
                 OutlinedButton.icon(
                   onPressed: vm.logs.isEmpty ? null : () => _confirmClear(context, vm),
@@ -313,11 +350,37 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
                 ),
                 const SizedBox(width: 8),
 
-                // Export Menu
+                // Export Menu with label
                 PopupMenuButton<String>(
                   tooltip: 'Export Logs',
                   enabled: vm.logs.isNotEmpty,
-                  icon: const Icon(Icons.file_download_outlined, size: 20),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.file_download_outlined,
+                          size: 16,
+                          color: vm.logs.isNotEmpty ? Theme.of(context).colorScheme.onSurface : Colors.grey,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Export',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: vm.logs.isNotEmpty ? Theme.of(context).colorScheme.onSurface : Colors.grey,
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_drop_down,
+                          size: 16,
+                          color: vm.logs.isNotEmpty ? Theme.of(context).colorScheme.onSurface : Colors.grey,
+                        ),
+                      ],
+                    ),
+                  ),
                   onSelected: (val) async {
                     if (val == 'csv') {
                       final path = await vm.exportCsv();

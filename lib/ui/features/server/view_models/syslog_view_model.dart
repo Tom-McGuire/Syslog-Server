@@ -50,6 +50,9 @@ class SyslogViewModel extends ChangeNotifier {
   bool _autoScroll = true;
   bool _isLoadingMore = false;
   bool _isImporting = false;
+  bool _showAutoDetected = false;
+  Set<String> _hiddenDeviceKeys = {};
+  Map<String, int> _deviceCounts = {};
   static const int defaultPageSize = 1000;
 
   // Getters
@@ -68,6 +71,48 @@ class SyslogViewModel extends ChangeNotifier {
   bool get hasMoreLogs => _logs.length < _totalLogCount;
   String get sortColumn => _filter.sortColumn;
   bool get sortAscending => _filter.sortAscending;
+  bool get showAutoDetected => _showAutoDetected;
+  Set<String> get selectedDeviceKeys => _filter.selectedDeviceKeys;
+  Set<String> get hiddenDeviceKeys => _hiddenDeviceKeys;
+  Map<String, int> get deviceCounts => _deviceCounts;
+
+  /// Known labeled devices from SharedDeviceDatabase that are not hidden in this app
+  List<SharedDevice> get knownLabeledDevices {
+    try {
+      if (!SharedDeviceDatabase.instance.isInitialized) return [];
+      return SharedDeviceDatabase.instance
+          .getAllDevices(hideDefaultNamed: true)
+          .where((d) => !_hiddenDeviceKeys.contains(d.macAddress))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Discovered syslog sending IPs or hostnames that are not in knownLabeledDevices and not hidden
+  List<String> get autoDetectedSources {
+    final sources = <String>[];
+    final knownMacs = knownLabeledDevices.map((d) => d.macAddress.toUpperCase()).toSet();
+    final knownNames = knownLabeledDevices.map((d) => d.name.toLowerCase()).toSet();
+
+    final ipCounts = _repository.getRemoteIpCounts(_filter);
+    for (final ip in ipCounts.keys) {
+      if (!_hiddenDeviceKeys.contains(ip) && !knownNames.contains(ip.toLowerCase())) {
+        sources.add(ip);
+      }
+    }
+
+    final hostCounts = _repository.getHostnameCounts(_filter);
+    for (final host in hostCounts.keys) {
+      if (!_hiddenDeviceKeys.contains(host) &&
+          !knownNames.contains(host.toLowerCase()) &&
+          !knownMacs.contains(host.toUpperCase()) &&
+          !sources.contains(host)) {
+        sources.add(host);
+      }
+    }
+    return sources;
+  }
 
   void _init() {
     _serverStatus = _repository.currentStatus;
@@ -82,7 +127,7 @@ class SyslogViewModel extends ChangeNotifier {
         _onBatchInsertedThrottled();
       } else {
         _totalLogCount = _repository.getLogCount(_filter);
-        _severityCounts = _repository.getSeverityCounts();
+        _severityCounts = _repository.getSeverityCounts(_filter);
         notifyListeners();
       }
     });
@@ -92,6 +137,10 @@ class SyslogViewModel extends ChangeNotifier {
           SharedDeviceDatabase.instance.onDatabaseChanged.listen((_) {
         notifyListeners();
       });
+    } catch (_) {}
+
+    try {
+      _hiddenDeviceKeys = _repository.getHiddenDeviceKeys();
     } catch (_) {}
 
     _refreshState();
@@ -131,7 +180,19 @@ class SyslogViewModel extends ChangeNotifier {
 
   void _refreshState() {
     _totalLogCount = _repository.getLogCount(_filter);
-    _severityCounts = _repository.getSeverityCounts();
+    _severityCounts = _repository.getSeverityCounts(_filter);
+
+    final newDeviceCounts = <String, int>{};
+    for (final dev in knownLabeledDevices) {
+      newDeviceCounts[dev.macAddress] = _repository.getCountForDeviceKey(dev.macAddress, _filter);
+    }
+    if (_showAutoDetected) {
+      for (final src in autoDetectedSources) {
+        newDeviceCounts[src] = _repository.getCountForDeviceKey(src, _filter);
+      }
+    }
+    _deviceCounts = newDeviceCounts;
+
     final countToFetch = (_logs.isEmpty ? defaultPageSize : _logs.length).clamp(defaultPageSize, 20000);
     _logs = _repository.getLogsPaged(
       offset: 0,
@@ -242,6 +303,54 @@ class SyslogViewModel extends ChangeNotifier {
       sortColumn: 'id',
       sortAscending: false,
     );
+    _refreshState();
+  }
+
+  void setShowAutoDetected(bool value) {
+    if (_showAutoDetected == value) return;
+    _showAutoDetected = value;
+    _refreshState();
+  }
+
+  void toggleDeviceFilter(String key) {
+    final updated = Set<String>.from(_filter.selectedDeviceKeys);
+    if (updated.contains(key)) {
+      updated.remove(key);
+    } else {
+      updated.add(key);
+    }
+    _filter = _filter.copyWith(selectedDeviceKeys: updated);
+    _refreshState();
+  }
+
+  void clearDeviceFilters() {
+    if (_filter.selectedDeviceKeys.isEmpty) return;
+    _filter = _filter.copyWith(selectedDeviceKeys: const {});
+    _refreshState();
+  }
+
+  void toggleDeviceVisibility(String key) {
+    final isHidden = _hiddenDeviceKeys.contains(key);
+    setDeviceHidden(key, !isHidden);
+  }
+
+  void setDeviceHidden(String key, bool isHidden) {
+    _repository.setDeviceHidden(key, isHidden);
+    if (isHidden) {
+      _hiddenDeviceKeys.add(key);
+      if (_filter.selectedDeviceKeys.contains(key)) {
+        final updated = Set<String>.from(_filter.selectedDeviceKeys)..remove(key);
+        _filter = _filter.copyWith(selectedDeviceKeys: updated);
+      }
+    } else {
+      _hiddenDeviceKeys.remove(key);
+    }
+    _refreshState();
+  }
+
+  void unhideAllDevices() {
+    _repository.unhideAllDevices();
+    _hiddenDeviceKeys.clear();
     _refreshState();
   }
 

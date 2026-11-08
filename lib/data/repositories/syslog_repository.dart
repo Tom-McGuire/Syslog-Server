@@ -88,9 +88,16 @@ class SyslogRepository {
     return _db.countLogs(filter);
   }
 
-  Map<SyslogSeverity, int> getSeverityCounts() {
-    return _db.getSeverityCounts();
+  Map<SyslogSeverity, int> getSeverityCounts([SyslogFilterCriteria? filter]) {
+    return _db.getSeverityCounts(filter);
   }
+
+  Set<String> getHiddenDeviceKeys() => _db.getHiddenDeviceKeys();
+  void setDeviceHidden(String deviceKey, bool isHidden) => _db.setDeviceHidden(deviceKey, isHidden);
+  void unhideAllDevices() => _db.unhideAllDevices();
+  Map<String, int> getRemoteIpCounts([SyslogFilterCriteria? filter]) => _db.getRemoteIpCounts(filter);
+  Map<String, int> getHostnameCounts([SyslogFilterCriteria? filter]) => _db.getHostnameCounts(filter);
+  int getCountForDeviceKey(String key, [SyslogFilterCriteria? filter]) => _db.getCountForDeviceKey(key, filter);
 
   void loadDemoLogs() {
     final demoLogs = DemoSyslogGenerator.generateDemoLogs();

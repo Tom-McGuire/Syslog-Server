@@ -6,6 +6,7 @@ class SyslogFilterCriteria {
     this.searchQuery = '',
     this.selectedSeverities = const {},
     this.selectedFacilities = const {},
+    this.selectedDeviceKeys = const {},
     this.remoteIp = '',
     this.hostname = '',
     this.appName = '',
@@ -18,6 +19,7 @@ class SyslogFilterCriteria {
   final String searchQuery;
   final Set<SyslogSeverity> selectedSeverities;
   final Set<SyslogFacility> selectedFacilities;
+  final Set<String> selectedDeviceKeys;
   final String remoteIp;
   final String hostname;
   final String appName;
@@ -30,6 +32,7 @@ class SyslogFilterCriteria {
       searchQuery.trim().isNotEmpty ||
       selectedSeverities.isNotEmpty ||
       selectedFacilities.isNotEmpty ||
+      selectedDeviceKeys.isNotEmpty ||
       remoteIp.trim().isNotEmpty ||
       hostname.trim().isNotEmpty ||
       appName.trim().isNotEmpty ||
@@ -40,6 +43,7 @@ class SyslogFilterCriteria {
     String? searchQuery,
     Set<SyslogSeverity>? selectedSeverities,
     Set<SyslogFacility>? selectedFacilities,
+    Set<String>? selectedDeviceKeys,
     String? remoteIp,
     String? hostname,
     String? appName,
@@ -53,6 +57,7 @@ class SyslogFilterCriteria {
       searchQuery: searchQuery ?? this.searchQuery,
       selectedSeverities: selectedSeverities ?? this.selectedSeverities,
       selectedFacilities: selectedFacilities ?? this.selectedFacilities,
+      selectedDeviceKeys: selectedDeviceKeys ?? this.selectedDeviceKeys,
       remoteIp: remoteIp ?? this.remoteIp,
       hostname: hostname ?? this.hostname,
       appName: appName ?? this.appName,

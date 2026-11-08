@@ -69,5 +69,46 @@ void main() {
       dbService.clearAll();
       expect(dbService.countLogs(const SyslogFilterCriteria()), 0);
     });
+
+    test('Device preferences persistence and unhide operations', () {
+      expect(dbService.getHiddenDeviceKeys(), isEmpty);
+
+      dbService.setDeviceHidden('00:11:22:33:44:55', true);
+      dbService.setDeviceHidden('192.168.1.100', true);
+      expect(dbService.getHiddenDeviceKeys(), containsAll(['00:11:22:33:44:55', '192.168.1.100']));
+
+      // Unhide single
+      dbService.setDeviceHidden('192.168.1.100', false);
+      expect(dbService.getHiddenDeviceKeys().contains('192.168.1.100'), isFalse);
+      expect(dbService.getHiddenDeviceKeys().contains('00:11:22:33:44:55'), isTrue);
+
+      // Unhide all
+      dbService.unhideAllDevices();
+      expect(dbService.getHiddenDeviceKeys(), isEmpty);
+    });
+
+    test('Source aggregation counts and device key log counting', () {
+      final demoLogs = DemoSyslogGenerator.generateDemoLogs();
+      dbService.insertBatch(demoLogs);
+
+      final ipCounts = dbService.getRemoteIpCounts();
+      expect(ipCounts.isNotEmpty, isTrue);
+
+      final hostCounts = dbService.getHostnameCounts();
+      expect(hostCounts.isNotEmpty, isTrue);
+
+      final firstIp = ipCounts.keys.first;
+      final ipCount = dbService.getCountForDeviceKey(firstIp);
+      expect(ipCount, ipCounts[firstIp]);
+
+      // Query logs filtering by selectedDeviceKeys
+      final filteredByIp = dbService.queryLogs(
+        filter: SyslogFilterCriteria(selectedDeviceKeys: {firstIp}),
+      );
+      expect(filteredByIp.isNotEmpty, isTrue);
+      for (final r in filteredByIp) {
+        expect(r.remoteIp == firstIp || r.hostname == firstIp, isTrue);
+      }
+    });
   });
 }

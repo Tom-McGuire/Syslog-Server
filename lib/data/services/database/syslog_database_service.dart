@@ -48,6 +48,12 @@ class SyslogDatabaseService {
       CREATE INDEX IF NOT EXISTS idx_syslog_ip ON syslog_records(remote_ip);
       CREATE INDEX IF NOT EXISTS idx_syslog_host ON syslog_records(hostname);
       CREATE INDEX IF NOT EXISTS idx_syslog_app ON syslog_records(app_name);
+
+      CREATE TABLE IF NOT EXISTS app_device_preferences (
+        device_key TEXT PRIMARY KEY NOT NULL,
+        is_hidden INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL
+      );
     ''');
   }
 
@@ -162,16 +168,24 @@ class SyslogDatabaseService {
     return result.first['count'] as int? ?? 0;
   }
 
-  /// Severity counts for quick badges
-  Map<SyslogSeverity, int> getSeverityCounts() {
+  /// Severity counts for quick badges under active filters (excluding selected severities to show available facets)
+  Map<SyslogSeverity, int> getSeverityCounts([SyslogFilterCriteria? filter]) {
     final counts = <SyslogSeverity, int>{
       for (final s in SyslogSeverity.values) s: 0,
     };
-    final result = _db.select('''
+    final baseFilter = filter?.copyWith(selectedSeverities: const {}) ?? const SyslogFilterCriteria();
+    final (whereClause, params) = _buildWhereClause(baseFilter);
+
+    final sql = StringBuffer('''
       SELECT severity, COUNT(*) as count
       FROM syslog_records
-      GROUP BY severity
     ''');
+    if (whereClause.isNotEmpty) {
+      sql.write(' WHERE $whereClause');
+    }
+    sql.write(' GROUP BY severity');
+
+    final result = _db.select(sql.toString(), params);
     for (final row in result) {
       final code = row['severity'] as int;
       final count = row['count'] as int;
@@ -187,6 +201,106 @@ class SyslogDatabaseService {
     try {
       _db.execute("DELETE FROM sqlite_sequence WHERE name = 'syslog_records'");
     } catch (_) {}
+  }
+
+  /// Retrieves keys (MAC addresses or IPs/hostnames) marked as hidden in this application
+  Set<String> getHiddenDeviceKeys() {
+    try {
+      final rows = _db.select('SELECT device_key FROM app_device_preferences WHERE is_hidden = 1');
+      return rows.map((r) => r['device_key'] as String).toSet();
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// Sets whether a specific device key is hidden in this application
+  void setDeviceHidden(String deviceKey, bool isHidden) {
+    try {
+      final now = DateTime.now().toIso8601String();
+      _db.execute('''
+        INSERT INTO app_device_preferences (device_key, is_hidden, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(device_key) DO UPDATE SET
+          is_hidden = excluded.is_hidden,
+          updated_at = excluded.updated_at
+      ''', [deviceKey.trim(), isHidden ? 1 : 0, now]);
+    } catch (_) {}
+  }
+
+  /// Restores visibility for all hidden devices in this application
+  void unhideAllDevices() {
+    try {
+      _db.execute('DELETE FROM app_device_preferences');
+    } catch (_) {}
+  }
+
+  /// Counts of syslog records grouped by remote IP under active filters (excluding selectedDeviceKeys)
+  Map<String, int> getRemoteIpCounts([SyslogFilterCriteria? filter]) {
+    final counts = <String, int>{};
+    try {
+      final baseFilter = filter?.copyWith(selectedDeviceKeys: const {}) ?? const SyslogFilterCriteria();
+      final (whereClause, params) = _buildWhereClause(baseFilter);
+
+      final sql = StringBuffer('''
+        SELECT remote_ip, COUNT(*) as count
+        FROM syslog_records
+      ''');
+      if (whereClause.isNotEmpty) {
+        sql.write(' WHERE $whereClause');
+      }
+      sql.write(' GROUP BY remote_ip ORDER BY count DESC');
+
+      final result = _db.select(sql.toString(), params);
+      for (final row in result) {
+        final ip = row['remote_ip'] as String?;
+        final count = row['count'] as int? ?? 0;
+        if (ip != null && ip.isNotEmpty) {
+          counts[ip] = count;
+        }
+      }
+    } catch (_) {}
+    return counts;
+  }
+
+  /// Counts of syslog records grouped by hostname under active filters (excluding selectedDeviceKeys)
+  Map<String, int> getHostnameCounts([SyslogFilterCriteria? filter]) {
+    final counts = <String, int>{};
+    try {
+      final baseFilter = filter?.copyWith(selectedDeviceKeys: const {}) ?? const SyslogFilterCriteria();
+      final (whereClause, params) = _buildWhereClause(baseFilter);
+
+      final sql = StringBuffer('''
+        SELECT hostname, COUNT(*) as count
+        FROM syslog_records
+      ''');
+      if (whereClause.isNotEmpty) {
+        sql.write(' WHERE $whereClause AND (hostname IS NOT NULL AND TRIM(hostname) != \'\')');
+      } else {
+        sql.write(' WHERE hostname IS NOT NULL AND TRIM(hostname) != \'\'');
+      }
+      sql.write(' GROUP BY hostname ORDER BY count DESC');
+
+      final result = _db.select(sql.toString(), params);
+      for (final row in result) {
+        final host = row['hostname'] as String?;
+        final count = row['count'] as int? ?? 0;
+        if (host != null && host.isNotEmpty) {
+          counts[host] = count;
+        }
+      }
+    } catch (_) {}
+    return counts;
+  }
+
+  /// Calculates count of logs that match a specific device key (MAC address, IP, or Hostname) under active filters
+  int getCountForDeviceKey(String key, [SyslogFilterCriteria? filter]) {
+    try {
+      final baseFilter = filter ?? const SyslogFilterCriteria();
+      final targetFilter = baseFilter.copyWith(selectedDeviceKeys: {key});
+      return countLogs(targetFilter);
+    } catch (_) {
+      return 0;
+    }
   }
 
   static String _escapeLike(String text) {
@@ -227,6 +341,29 @@ class SyslogDatabaseService {
 
       clauses.add('(${searchClauses.join(' OR ')})');
       params.addAll(searchParams);
+    }
+
+    // Selected device keys filter (MACs, IPs, or Hostnames)
+    if (filter.selectedDeviceKeys.isNotEmpty) {
+      final deviceClauses = <String>[];
+      final deviceParams = <dynamic>[];
+
+      for (final key in filter.selectedDeviceKeys) {
+        if (SharedDevice.isValidMac(key)) {
+          final normMac = SharedDevice.normalizeMac(key);
+          final pattern = '%${_escapeLike(normMac)}%';
+          deviceClauses.add("(message LIKE ? ESCAPE '\\' OR raw_payload LIKE ? ESCAPE '\\' OR hostname LIKE ? ESCAPE '\\')");
+          deviceParams.addAll([pattern, pattern, pattern]);
+        } else {
+          deviceClauses.add('(remote_ip = ? OR hostname = ?)');
+          deviceParams.addAll([key, key]);
+        }
+      }
+
+      if (deviceClauses.isNotEmpty) {
+        clauses.add('(${deviceClauses.join(' OR ')})');
+        params.addAll(deviceParams);
+      }
     }
 
     // Severity filter
