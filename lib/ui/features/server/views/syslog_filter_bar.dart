@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import '../../../../domain/models/syslog_facility.dart';
 import '../../../../domain/models/syslog_severity.dart';
 import '../view_models/syslog_view_model.dart';
-import 'rename_device_dialog.dart';
+import 'edit_device_dialog.dart';
 
 class SyslogFilterBar extends StatefulWidget {
   const SyslogFilterBar({super.key});
@@ -120,7 +120,18 @@ class _SyslogFilterBarState extends State<SyslogFilterBar> {
         break;
       case 'edit':
         if (!mounted) return;
-        await RenameDeviceDialog.show(context, isMac ? key : '');
+        SharedDevice? device;
+        if (isMac && SharedDeviceDatabase.instance.isInitialized) {
+          device = SharedDeviceDatabase.instance.getDeviceByMac(key);
+        }
+        await EditDeviceDialog.show(
+          context,
+          macAddress: isMac ? key : '',
+          initialName: device?.name ?? (isMac ? null : displayName),
+          initialCategory: device?.deviceType,
+          initialVendor: device?.vendor,
+          initialNotes: device?.notes ?? (isMac ? null : 'Syslog sender source: $key'),
+        );
         break;
       case 'hide':
         vm.setDeviceHidden(key, true);
@@ -411,7 +422,7 @@ class _SyslogFilterBarState extends State<SyslogFilterBar> {
                     backgroundColor: const Color(0xFF252526),
                     side: const BorderSide(color: Color(0xFF3E3E42)),
                     onPressed: () {
-                      RenameDeviceDialog.show(context, '');
+                      EditDeviceDialog.show(context, macAddress: '');
                     },
                   ),
                 ),

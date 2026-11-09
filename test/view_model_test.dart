@@ -294,5 +294,79 @@ void main() {
       final deviceCountUnderSeverity = viewModel.deviceCounts[testDevice] ?? 0;
       expect(deviceCountUnderSeverity, combinedCount);
     });
+
+    test('Known and Unknown device classification and automatic visibility rules', () async {
+      await SharedDeviceDatabase.instance.init(dbPath: ':memory:');
+
+      // Add a known device (with custom name)
+      SharedDeviceDatabase.instance.upsertDevice(
+        SharedDevice(
+          macAddress: '00:11:22:33:44:01',
+          name: 'Core Router',
+          sourceApp: 'Syslog Server',
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+
+      // Add an unknown device (no custom name - default placeholder)
+      SharedDeviceDatabase.instance.upsertDevice(
+        SharedDevice(
+          macAddress: '00:11:22:33:44:02',
+          name: 'Device 00:11:22:33:44:02',
+          sourceApp: 'Syslog Server',
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+
+      viewModel.unhideAllDevices();
+
+      // Check known vs unknown categorization
+      final known = viewModel.knownDevices;
+      final unknown = viewModel.unknownDevices;
+      expect(known.map((d) => d.macAddress), contains('00:11:22:33:44:01'));
+      expect(unknown.map((d) => d.macAddress), contains('00:11:22:33:44:02'));
+
+      // Check automatic visibility:
+      // Known device is visible by default
+      expect(viewModel.isDeviceVisible(known.first), isTrue);
+      // Unknown device is automatically hidden by default
+      expect(viewModel.isDeviceVisible(unknown.first), isFalse);
+
+      // Visible filter devices should only include known device
+      final visible = viewModel.visibleDevices;
+      expect(visible.map((d) => d.macAddress), contains('00:11:22:33:44:01'));
+      expect(visible.map((d) => d.macAddress).contains('00:11:22:33:44:02'), isFalse);
+
+      // User explicitly unhides the unknown device
+      viewModel.setDeviceHidden('00:11:22:33:44:02', false);
+      expect(viewModel.isDeviceKeyVisible('00:11:22:33:44:02'), isTrue);
+      expect(viewModel.visibleDevices.map((d) => d.macAddress), contains('00:11:22:33:44:02'));
+
+      // Updating unknown device with a custom name makes it known and visible
+      viewModel.updateDeviceDetails(
+        mac: '00:11:22:33:44:02',
+        name: 'Conference Room Display',
+        category: 'pc',
+      );
+      final updatedDevice = SharedDeviceDatabase.instance.getDeviceByMac('00:11:22:33:44:02')!;
+      expect(updatedDevice.hasCustomName, isTrue);
+      expect(viewModel.knownDevices.map((d) => d.macAddress), contains('00:11:22:33:44:02'));
+      expect(viewModel.isDeviceVisible(updatedDevice), isTrue);
+    });
+
+    test('Filter state and custom in-app library preferences persist across app restarts', () async {
+      viewModel.setShowAutoDetected(true);
+      viewModel.toggleDeviceFilter('192.168.1.1');
+      viewModel.setDeviceHidden('00:11:22:33:44:55', true);
+
+      // Create a second ViewModel sharing the same repository/database
+      final newViewModel = SyslogViewModel(repository: repository);
+      expect(newViewModel.showAutoDetected, isTrue);
+      expect(newViewModel.selectedDeviceKeys.contains('192.168.1.1'), isTrue);
+      expect(newViewModel.hiddenDeviceKeys.contains('00:11:22:33:44:55'), isTrue);
+      newViewModel.dispose();
+    });
   });
 }

@@ -13,6 +13,7 @@ import 'package:syslog_server/domain/models/syslog_severity.dart';
 import 'package:syslog_server/ui/features/server/view_models/syslog_view_model.dart';
 import 'package:syslog_server/ui/features/server/views/device_filter_management_dialog.dart';
 import 'package:syslog_server/ui/features/server/views/device_mac_chip.dart';
+import 'package:syslog_server/ui/features/server/views/edit_device_dialog.dart';
 import 'package:syslog_server/ui/features/server/views/rename_device_dialog.dart';
 import 'package:syslog_server/ui/features/server/views/syslog_control_bar.dart';
 import 'package:syslog_server/ui/features/server/views/syslog_detail_panel.dart';
@@ -429,14 +430,25 @@ void main() {
       expect(viewModel.showAutoDetected, isTrue);
     });
 
-    testWidgets('DeviceFilterManagementDialog allows toggling device visibility and unhiding all', (tester) async {
+    testWidgets('DeviceFilterManagementDialog allows toggling device visibility and reset', (tester) async {
       tester.view.physicalSize = const Size(1400, 900);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
 
-      const testMac = '11:22:33:44:55:66';
-      MacAddressHelper.updateDeviceName(testMac, 'Edge Router Alpha');
-      viewModel.setDeviceHidden(testMac, true);
+      const knownMac = '11:22:33:44:55:66';
+      MacAddressHelper.updateDeviceName(knownMac, 'Edge Router Alpha');
+      viewModel.setDeviceHidden(knownMac, true);
+
+      const unknownMac = 'AA:BB:CC:DD:EE:FF';
+      SharedDeviceDatabase.instance.upsertDevice(
+        SharedDevice(
+          macAddress: unknownMac,
+          name: 'Device AA:BB:CC:DD:EE:FF',
+          sourceApp: 'Syslog Server',
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
 
       await tester.pumpWidget(
         createTestApp(
@@ -446,17 +458,57 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Manage Filter Devices'), findsOneWidget);
+      expect(find.text('Custom Library'), findsOneWidget);
       expect(find.textContaining('Edge Router Alpha'), findsOneWidget);
-      expect(find.text('Hidden'), findsWidgets);
+      expect(find.textContaining('Hidden from Filters'), findsWidgets);
 
-      // Unhide All button
-      final unhideAllBtn = find.textContaining('Unhide All');
-      expect(unhideAllBtn, findsOneWidget);
-      await tester.tap(unhideAllBtn);
+      // Check Unknown Devices tab
+      await tester.tap(find.textContaining('Unknown Devices'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Device AA:BB:CC:DD:EE:FF'), findsOneWidget);
+      expect(find.text('No Custom Name'), findsOneWidget);
+
+      // Reset Visibility button
+      final resetBtn = find.text('Reset Visibility');
+      expect(resetBtn, findsOneWidget);
+      await tester.tap(resetBtn);
       await tester.pumpAndSettle();
 
-      expect(viewModel.hiddenDeviceKeys, isEmpty);
+      expect(viewModel.devicePreferences, isEmpty);
+    });
+
+    testWidgets('EditDeviceDialog edits full details and persists to shared library', (tester) async {
+      const testMac = '33:44:55:66:77:88';
+
+      await tester.pumpWidget(
+        createTestApp(
+          viewModel: viewModel,
+          child: const EditDeviceDialog(
+            macAddress: testMac,
+            initialName: 'Initial Name',
+            initialVendor: 'Cisco',
+            initialNotes: 'Rack 1, Slot 2',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Edit Device in Shared Library'), findsOneWidget);
+      expect(find.text(testMac), findsOneWidget);
+      expect(find.text('Initial Name'), findsOneWidget);
+
+      // Change name
+      final nameField = find.widgetWithText(TextFormField, 'Initial Name');
+      await tester.enterText(nameField, 'Distribution Switch 01');
+
+      // Tap Save
+      await tester.tap(find.text('Save to Library'));
+      await tester.pumpAndSettle();
+
+      final updated = SharedDeviceDatabase.instance.getDeviceByMac(testMac);
+      expect(updated, isNotNull);
+      expect(updated!.name, 'Distribution Switch 01');
+      expect(updated.vendor, 'Cisco');
     });
   });
 }

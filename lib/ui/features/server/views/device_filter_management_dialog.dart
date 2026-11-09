@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:network_suite_shared/network_suite_shared.dart';
 import 'package:provider/provider.dart';
 import '../view_models/syslog_view_model.dart';
-import 'rename_device_dialog.dart';
+import 'edit_device_dialog.dart';
 
-/// Modal dialog allowing users to manage device visibility in Syslog Server's filter bar,
-/// inspect known and auto-detected devices, and edit device metadata.
+/// Modal dialog allowing users to manage devices in the Custom Library,
+/// edit device details, and show/hide devices as filter options in the filter bar.
 class DeviceFilterManagementDialog extends StatefulWidget {
   const DeviceFilterManagementDialog({super.key});
 
@@ -42,36 +42,35 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<SyslogViewModel>();
-    final hiddenKeys = vm.hiddenDeviceKeys;
+    final theme = Theme.of(context);
 
-    // All labeled devices from SharedDeviceDatabase (both visible and hidden)
-    final allSharedDevices = SharedDeviceDatabase.instance.isInitialized
-        ? SharedDeviceDatabase.instance.getAllDevices(hideDefaultNamed: true)
+    // Fetch all devices from SharedDeviceDatabase
+    final allDevices = SharedDeviceDatabase.instance.isInitialized
+        ? SharedDeviceDatabase.instance.getAllDevices()
         : <SharedDevice>[];
 
-    final filteredSharedDevices = allSharedDevices.where((d) {
+    // Filter by search query
+    final matchingDevices = allDevices.where((d) {
       if (_searchQuery.isEmpty) return true;
       final q = _searchQuery.toLowerCase();
       return d.name.toLowerCase().contains(q) ||
           d.macAddress.toLowerCase().contains(q) ||
-          (d.vendor?.toLowerCase().contains(q) ?? false);
+          (d.vendor?.toLowerCase().contains(q) ?? false) ||
+          (d.notes?.toLowerCase().contains(q) ?? false);
     }).toList();
 
-    // Auto-detected sources
-    final allAutoDetected = vm.autoDetectedSources;
-    final filteredAutoDetected = allAutoDetected.where((s) {
-      if (_searchQuery.isEmpty) return true;
-      return s.toLowerCase().contains(_searchQuery.toLowerCase());
-    }).toList();
+    // Known devices: devices in the database which have been given a custom name
+    final knownDevices = matchingDevices.where((d) => d.hasCustomName).toList();
 
-    final theme = Theme.of(context);
+    // Unknown devices: devices in the database without custom names
+    final unknownDevices = matchingDevices.where((d) => !d.hasCustomName).toList();
 
     return Dialog(
-      backgroundColor: theme.colorScheme.surface,
+      backgroundColor: const Color(0xFF1E1E1E),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720, maxHeight: 600),
+        constraints: const BoxConstraints(maxWidth: 720, maxHeight: 640),
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -86,7 +85,7 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
                       color: theme.colorScheme.primary.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Icon(Icons.devices, color: theme.colorScheme.primary, size: 20),
+                    child: Icon(Icons.menu_book, color: theme.colorScheme.primary, size: 20),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -94,20 +93,35 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Manage Filter Devices',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          'Custom Library',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                         Text(
-                          'Show or hide devices in this application\'s filter bar',
-                          style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                          'Manage known and unknown devices in the shared database and configure filter visibility.',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
                         ),
                       ],
                     ),
                   ),
-                  if (hiddenKeys.isNotEmpty) ...[
+                  FilledButton.tonalIcon(
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Add Device'),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                    onPressed: () {
+                      EditDeviceDialog.show(context, macAddress: '');
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  if (vm.devicePreferences.isNotEmpty) ...[
                     TextButton.icon(
-                      icon: const Icon(Icons.visibility, size: 16),
-                      label: Text('Unhide All (${hiddenKeys.length})', style: const TextStyle(fontSize: 12)),
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text('Reset Visibility', style: TextStyle(fontSize: 12)),
                       onPressed: () => vm.unhideAllDevices(),
                     ),
                     const SizedBox(width: 8),
@@ -119,7 +133,7 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
 
               // Search Bar
               SizedBox(
@@ -129,7 +143,7 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
                   style: const TextStyle(fontSize: 12),
                   onChanged: (val) => setState(() => _searchQuery = val.trim()),
                   decoration: InputDecoration(
-                    hintText: 'Search by device name, IP, MAC address, or vendor...',
+                    hintText: 'Search devices by name, MAC, vendor, or notes...',
                     prefixIcon: const Icon(Icons.search, size: 16),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
@@ -140,6 +154,17 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
                             },
                           )
                         : null,
+                    filled: true,
+                    fillColor: const Color(0xFF252526),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFF3E3E42)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFF3E3E42)),
+                    ),
                   ),
                 ),
               ),
@@ -148,193 +173,39 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
               // Tabs
               TabBar(
                 controller: _tabController,
+                indicatorColor: theme.colorScheme.primary,
                 tabs: [
-                  Tab(text: 'Known Shared Devices (${filteredSharedDevices.length})'),
-                  Tab(text: 'Auto-Detected Sources (${filteredAutoDetected.length})'),
+                  Tab(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.verified_outlined, size: 16),
+                        const SizedBox(width: 8),
+                        Text('Known Devices (${knownDevices.length})'),
+                      ],
+                    ),
+                  ),
+                  Tab(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.help_outline, size: 16),
+                        const SizedBox(width: 8),
+                        Text('Unknown Devices (${unknownDevices.length})'),
+                      ],
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
 
               // Tab Views
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
                   children: [
-                    // Tab 1: Known Shared Devices
-                    filteredSharedDevices.isEmpty
-                        ? Center(
-                            child: Text(
-                              _searchQuery.isEmpty
-                                  ? 'No labeled devices found in the Shared Device Library.'
-                                  : 'No devices matched "$_searchQuery"',
-                              style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
-                            ),
-                          )
-                        : ListView.separated(
-                            itemCount: filteredSharedDevices.length,
-                            separatorBuilder: (context, index) => const Divider(height: 1),
-                            itemBuilder: (ctx, i) {
-                              final dev = filteredSharedDevices[i];
-                              final isHidden = hiddenKeys.contains(dev.macAddress);
-                              final count = vm.deviceCounts[dev.macAddress] ??
-                                  vm.repository.getCountForDeviceKey(dev.macAddress);
-
-                              return Opacity(
-                                opacity: isHidden ? 0.55 : 1.0,
-                                child: ListTile(
-                                  dense: true,
-                                  leading: CircleAvatar(
-                                    radius: 14,
-                                    backgroundColor: theme.colorScheme.primaryContainer,
-                                    child: Icon(dev.category.icon, size: 14, color: theme.colorScheme.primary),
-                                  ),
-                                  title: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          dev.name,
-                                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      if (isHidden) ...[
-                                        const SizedBox(width: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: Colors.amber.withValues(alpha: 0.2),
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: const Text(
-                                            'Hidden',
-                                            style: TextStyle(fontSize: 10, color: Colors.amber, fontWeight: FontWeight.bold),
-                                          ),
-                                        ),
-                                      ],
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        '$count logs',
-                                        style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
-                                      ),
-                                    ],
-                                  ),
-                                  subtitle: Text(
-                                    '${dev.macAddress}${dev.vendor != null ? ' • ${dev.vendor}' : ''}',
-                                    style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
-                                  ),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        icon: Icon(
-                                          isHidden ? Icons.visibility_off : Icons.visibility,
-                                          size: 18,
-                                          color: isHidden ? Colors.grey : theme.colorScheme.primary,
-                                        ),
-                                        tooltip: isHidden ? 'Show in filter bar' : 'Hide from filter bar',
-                                        onPressed: () => vm.toggleDeviceVisibility(dev.macAddress),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.edit, size: 18),
-                                        tooltip: 'Edit Device in Shared Library',
-                                        onPressed: () => RenameDeviceDialog.show(context, dev.macAddress),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-
-                    // Tab 2: Auto-Detected Sources
-                    filteredAutoDetected.isEmpty
-                        ? Center(
-                            child: Text(
-                              _searchQuery.isEmpty
-                                  ? 'No auto-detected sources in current capture.'
-                                  : 'No sources matched "$_searchQuery"',
-                              style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
-                            ),
-                          )
-                        : ListView.separated(
-                            itemCount: filteredAutoDetected.length,
-                            separatorBuilder: (context, index) => const Divider(height: 1),
-                            itemBuilder: (ctx, i) {
-                              final src = filteredAutoDetected[i];
-                              final isHidden = hiddenKeys.contains(src);
-                              final count = vm.deviceCounts[src] ?? vm.repository.getCountForDeviceKey(src);
-
-                              return Opacity(
-                                opacity: isHidden ? 0.55 : 1.0,
-                                child: ListTile(
-                                  dense: true,
-                                  leading: CircleAvatar(
-                                    radius: 14,
-                                    backgroundColor: Colors.blueGrey.withValues(alpha: 0.2),
-                                    child: const Icon(Icons.sensors, size: 14, color: Colors.blueAccent),
-                                  ),
-                                  title: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          src,
-                                          style: const TextStyle(
-                                            fontFamily: 'monospace',
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      if (isHidden) ...[
-                                        const SizedBox(width: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: Colors.amber.withValues(alpha: 0.2),
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: const Text(
-                                            'Hidden',
-                                            style: TextStyle(fontSize: 10, color: Colors.amber, fontWeight: FontWeight.bold),
-                                          ),
-                                        ),
-                                      ],
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        '$count logs',
-                                        style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
-                                      ),
-                                    ],
-                                  ),
-                                  subtitle: const Text(
-                                    'Auto-detected from syslog traffic',
-                                    style: TextStyle(fontSize: 11, color: Colors.grey),
-                                  ),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        icon: Icon(
-                                          isHidden ? Icons.visibility_off : Icons.visibility,
-                                          size: 18,
-                                          color: isHidden ? Colors.grey : theme.colorScheme.primary,
-                                        ),
-                                        tooltip: isHidden ? 'Show in filter bar' : 'Hide from filter bar',
-                                        onPressed: () => vm.toggleDeviceVisibility(src),
-                                      ),
-                                      if (SharedDevice.isValidMac(src))
-                                        IconButton(
-                                          icon: const Icon(Icons.add_circle_outline, size: 18),
-                                          tooltip: 'Save & Name in Shared Library',
-                                          onPressed: () => RenameDeviceDialog.show(context, src),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                    _buildDeviceList(context, vm, knownDevices, isKnownTab: true),
+                    _buildDeviceList(context, vm, unknownDevices, isKnownTab: false),
                   ],
                 ),
               ),
@@ -342,6 +213,228 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildDeviceList(
+    BuildContext context,
+    SyslogViewModel vm,
+    List<SharedDevice> devices, {
+    required bool isKnownTab,
+  }) {
+    if (devices.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isKnownTab ? Icons.devices : Icons.device_unknown,
+              size: 40,
+              color: Colors.grey.shade600,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              _searchQuery.isNotEmpty
+                  ? 'No matching devices found.'
+                  : isKnownTab
+                      ? 'No known devices with custom names in database.'
+                      : 'No unknown devices in database.',
+              style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final deviceCounts = vm.deviceCounts;
+
+    return ListView.separated(
+      itemCount: devices.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 6),
+      itemBuilder: (context, index) {
+        final device = devices[index];
+        final isVisible = vm.isDeviceVisible(device);
+        final count = deviceCounts[device.macAddress] ?? 0;
+
+        return Opacity(
+          opacity: isVisible ? 1.0 : 0.55,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF252526),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isVisible
+                    ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.35)
+                    : const Color(0xFF3E3E42),
+              ),
+            ),
+            child: Row(
+              children: [
+                // Category Icon
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: isVisible
+                      ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)
+                      : Colors.grey.withValues(alpha: 0.2),
+                  child: Icon(
+                    device.category.icon,
+                    size: 16,
+                    color: isVisible ? Theme.of(context).colorScheme.primary : Colors.grey,
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // Device Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              device.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: Colors.white,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          if (isKnownTab)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'Custom Name',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Color(0xFF10B981),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            )
+                          else
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'No Custom Name',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.amber,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          if (!isVisible) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'Hidden from Filters',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (count > 0) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: Colors.blueAccent.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                '$count logs',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.blueAccent,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${device.macAddress} • ${device.vendor ?? "Unknown Vendor"} • ${device.category.label}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                          color: Colors.grey,
+                        ),
+                      ),
+                      if (device.notes != null && device.notes!.trim().isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          device.notes!,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontStyle: FontStyle.italic,
+                            color: Colors.grey.shade400,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+
+                // Visibility Toggle Button
+                IconButton(
+                  icon: Icon(
+                    isVisible ? Icons.visibility : Icons.visibility_off,
+                    size: 18,
+                    color: isVisible ? Theme.of(context).colorScheme.primary : Colors.grey,
+                  ),
+                  tooltip: isVisible
+                      ? 'Visible in filter bar (Click to hide)'
+                      : 'Hidden from filter bar (Click to show)',
+                  onPressed: () {
+                    vm.toggleDeviceVisibility(device.macAddress);
+                  },
+                ),
+
+                // Edit Details Button
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  tooltip: 'Edit Device Details in Shared Library',
+                  onPressed: () {
+                    EditDeviceDialog.show(
+                      context,
+                      macAddress: device.macAddress,
+                      initialName: device.name,
+                      initialCategory: device.deviceType,
+                      initialVendor: device.vendor,
+                      initialNotes: device.notes,
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

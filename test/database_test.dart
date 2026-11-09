@@ -87,6 +87,28 @@ void main() {
       expect(dbService.getHiddenDeviceKeys(), isEmpty);
     });
 
+    test('App state and device preferences key-value persistence', () {
+      expect(dbService.getAppState('show_auto_detected'), isNull);
+      dbService.setAppState('show_auto_detected', 'true');
+      expect(dbService.getAppState('show_auto_detected'), 'true');
+
+      dbService.setAppState('selected_device_keys', '["00:11:22:33:44:55"]');
+      expect(dbService.getAppState('selected_device_keys'), '["00:11:22:33:44:55"]');
+
+      dbService.removeAppState('show_auto_detected');
+      expect(dbService.getAppState('show_auto_detected'), isNull);
+
+      // getDevicePreferences map returns explicit 0 or 1
+      dbService.setDeviceHidden('00:AA:BB:CC:DD:EE', false); // explicitly shown
+      dbService.setDeviceHidden('00:11:22:33:44:55', true);  // explicitly hidden
+      final prefs = dbService.getDevicePreferences();
+      expect(prefs['00:AA:BB:CC:DD:EE'], isFalse);
+      expect(prefs['00:11:22:33:44:55'], isTrue);
+
+      dbService.clearDevicePreference('00:AA:BB:CC:DD:EE');
+      expect(dbService.getDevicePreferences().containsKey('00:AA:BB:CC:DD:EE'), isFalse);
+    });
+
     test('Source aggregation counts and device key log counting', () {
       final demoLogs = DemoSyslogGenerator.generateDemoLogs();
       dbService.insertBatch(demoLogs);

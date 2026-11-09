@@ -54,6 +54,12 @@ class SyslogDatabaseService {
         is_hidden INTEGER NOT NULL DEFAULT 0,
         updated_at TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS app_state (
+        key TEXT PRIMARY KEY NOT NULL,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
     ''');
   }
 
@@ -203,6 +209,21 @@ class SyslogDatabaseService {
     } catch (_) {}
   }
 
+  /// Retrieves explicit visibility preferences for devices in this application.
+  /// Map value is true if explicitly hidden, false if explicitly shown.
+  Map<String, bool> getDevicePreferences() {
+    final prefs = <String, bool>{};
+    try {
+      final rows = _db.select('SELECT device_key, is_hidden FROM app_device_preferences');
+      for (final r in rows) {
+        final key = r['device_key'] as String;
+        final isHidden = (r['is_hidden'] as int) == 1;
+        prefs[key] = isHidden;
+      }
+    } catch (_) {}
+    return prefs;
+  }
+
   /// Retrieves keys (MAC addresses or IPs/hostnames) marked as hidden in this application
   Set<String> getHiddenDeviceKeys() {
     try {
@@ -227,10 +248,49 @@ class SyslogDatabaseService {
     } catch (_) {}
   }
 
+  /// Removes explicit preference for a specific device key (restoring automatic defaults)
+  void clearDevicePreference(String deviceKey) {
+    try {
+      _db.execute('DELETE FROM app_device_preferences WHERE device_key = ?', [deviceKey.trim()]);
+    } catch (_) {}
+  }
+
   /// Restores visibility for all hidden devices in this application
   void unhideAllDevices() {
     try {
       _db.execute('DELETE FROM app_device_preferences');
+    } catch (_) {}
+  }
+
+  /// Retrieves a persisted application state value by key
+  String? getAppState(String key) {
+    try {
+      final rows = _db.select('SELECT value FROM app_state WHERE key = ?', [key]);
+      if (rows.isNotEmpty) {
+        return rows.first['value'] as String?;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Persists an application state key-value pair
+  void setAppState(String key, String value) {
+    try {
+      final now = DateTime.now().toIso8601String();
+      _db.execute('''
+        INSERT INTO app_state (key, value, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(key) DO UPDATE SET
+          value = excluded.value,
+          updated_at = excluded.updated_at
+      ''', [key, value, now]);
+    } catch (_) {}
+  }
+
+  /// Removes a persisted application state key
+  void removeAppState(String key) {
+    try {
+      _db.execute('DELETE FROM app_state WHERE key = ?', [key]);
     } catch (_) {}
   }
 

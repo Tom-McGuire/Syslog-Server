@@ -51,7 +51,7 @@ class SyslogViewModel extends ChangeNotifier {
   bool _isLoadingMore = false;
   bool _isImporting = false;
   bool _showAutoDetected = false;
-  Set<String> _hiddenDeviceKeys = {};
+  Map<String, bool> _devicePreferences = {};
   Map<String, int> _deviceCounts = {};
   static const int defaultPageSize = 1000;
 
@@ -73,40 +73,122 @@ class SyslogViewModel extends ChangeNotifier {
   bool get sortAscending => _filter.sortAscending;
   bool get showAutoDetected => _showAutoDetected;
   Set<String> get selectedDeviceKeys => _filter.selectedDeviceKeys;
-  Set<String> get hiddenDeviceKeys => _hiddenDeviceKeys;
+  Map<String, bool> get devicePreferences => _devicePreferences;
   Map<String, int> get deviceCounts => _deviceCounts;
 
-  /// Known labeled devices from SharedDeviceDatabase that are not hidden in this app
-  List<SharedDevice> get knownLabeledDevices {
+  /// Checks whether a specific [SharedDevice] is visible as a filter pill in this application.
+  /// Devices without custom names are automatically hidden by default unless explicitly unhidden.
+  /// Devices with custom names are visible by default unless explicitly hidden.
+  bool isDeviceVisible(SharedDevice d) {
+    if (_devicePreferences.containsKey(d.macAddress)) {
+      return !_devicePreferences[d.macAddress]!;
+    }
+    return d.hasCustomName;
+  }
+
+  /// Checks whether an arbitrary device key (MAC, IP, Hostname) is visible in this application.
+  bool isDeviceKeyVisible(String key) {
+    if (SharedDevice.isValidMac(key)) {
+      try {
+        if (SharedDeviceDatabase.instance.isInitialized) {
+          final d = SharedDeviceDatabase.instance.getDeviceByMac(key);
+          if (d != null) {
+            return isDeviceVisible(d);
+          }
+        }
+      } catch (_) {}
+      if (_devicePreferences.containsKey(key)) {
+        return !_devicePreferences[key]!;
+      }
+      return false;
+    }
+    if (_devicePreferences.containsKey(key)) {
+      return !_devicePreferences[key]!;
+    }
+    return true;
+  }
+
+  /// Known devices from SharedDeviceDatabase that have been given a custom name
+  List<SharedDevice> get knownDevices {
     try {
       if (!SharedDeviceDatabase.instance.isInitialized) return [];
       return SharedDeviceDatabase.instance
-          .getAllDevices(hideDefaultNamed: true)
-          .where((d) => !_hiddenDeviceKeys.contains(d.macAddress))
+          .getAllDevices()
+          .where((d) => d.hasCustomName)
           .toList();
     } catch (_) {
       return [];
     }
   }
 
-  /// Discovered syslog sending IPs or hostnames that are not in knownLabeledDevices and not hidden
+  /// Unknown devices in SharedDeviceDatabase without custom names
+  List<SharedDevice> get unknownDevices {
+    try {
+      if (!SharedDeviceDatabase.instance.isInitialized) return [];
+      return SharedDeviceDatabase.instance
+          .getAllDevices()
+          .where((d) => !d.hasCustomName)
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// All devices from SharedDeviceDatabase currently visible in the filter bar
+  List<SharedDevice> get visibleDevices {
+    try {
+      if (!SharedDeviceDatabase.instance.isInitialized) return [];
+      return SharedDeviceDatabase.instance
+          .getAllDevices()
+          .where(isDeviceVisible)
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Backward-compatible alias for [visibleDevices]
+  List<SharedDevice> get knownLabeledDevices => visibleDevices;
+
+  /// Set of device keys currently hidden in this application
+  Set<String> get hiddenDeviceKeys {
+    final hidden = <String>{};
+    try {
+      if (SharedDeviceDatabase.instance.isInitialized) {
+        final all = SharedDeviceDatabase.instance.getAllDevices();
+        for (final d in all) {
+          if (!isDeviceVisible(d)) {
+            hidden.add(d.macAddress);
+          }
+        }
+      }
+    } catch (_) {}
+    for (final entry in _devicePreferences.entries) {
+      if (entry.value) {
+        hidden.add(entry.key);
+      }
+    }
+    return hidden;
+  }
+
+  /// Discovered syslog sending IPs or hostnames that are not in visible devices and not hidden
   List<String> get autoDetectedSources {
     final sources = <String>[];
-    final knownMacs = knownLabeledDevices.map((d) => d.macAddress.toUpperCase()).toSet();
-    final knownNames = knownLabeledDevices.map((d) => d.name.toLowerCase()).toSet();
+    final visibleMacs = visibleDevices.map((d) => d.macAddress.toUpperCase()).toSet();
+    final visibleNames = visibleDevices.map((d) => d.name.toLowerCase()).toSet();
 
     final ipCounts = _repository.getRemoteIpCounts(_filter);
     for (final ip in ipCounts.keys) {
-      if (!_hiddenDeviceKeys.contains(ip) && !knownNames.contains(ip.toLowerCase())) {
+      if ((_devicePreferences[ip] != true) && !visibleNames.contains(ip.toLowerCase())) {
         sources.add(ip);
       }
     }
 
     final hostCounts = _repository.getHostnameCounts(_filter);
     for (final host in hostCounts.keys) {
-      if (!_hiddenDeviceKeys.contains(host) &&
-          !knownNames.contains(host.toLowerCase()) &&
-          !knownMacs.contains(host.toUpperCase()) &&
+      if ((_devicePreferences[host] != true) &&
+          !visibleNames.contains(host.toLowerCase()) &&
+          !visibleMacs.contains(host.toUpperCase()) &&
           !sources.contains(host)) {
         sources.add(host);
       }
@@ -140,7 +222,21 @@ class SyslogViewModel extends ChangeNotifier {
     } catch (_) {}
 
     try {
-      _hiddenDeviceKeys = _repository.getHiddenDeviceKeys();
+      _devicePreferences = _repository.getDevicePreferences();
+    } catch (_) {}
+
+    try {
+      final savedShowAuto = _repository.getAppState('show_auto_detected');
+      if (savedShowAuto != null) {
+        _showAutoDetected = savedShowAuto == 'true';
+      }
+      final savedSelected = _repository.getAppState('selected_device_keys');
+      if (savedSelected != null && savedSelected.isNotEmpty) {
+        final decoded = jsonDecode(savedSelected);
+        if (decoded is List) {
+          _filter = _filter.copyWith(selectedDeviceKeys: decoded.cast<String>().toSet());
+        }
+      }
     } catch (_) {}
 
     _refreshState();
@@ -309,7 +405,19 @@ class SyslogViewModel extends ChangeNotifier {
   void setShowAutoDetected(bool value) {
     if (_showAutoDetected == value) return;
     _showAutoDetected = value;
+    try {
+      _repository.setAppState('show_auto_detected', value.toString());
+    } catch (_) {}
     _refreshState();
+  }
+
+  void _persistSelectedDeviceKeys() {
+    try {
+      _repository.setAppState(
+        'selected_device_keys',
+        jsonEncode(_filter.selectedDeviceKeys.toList()),
+      );
+    } catch (_) {}
   }
 
   void toggleDeviceFilter(String key) {
@@ -320,37 +428,36 @@ class SyslogViewModel extends ChangeNotifier {
       updated.add(key);
     }
     _filter = _filter.copyWith(selectedDeviceKeys: updated);
+    _persistSelectedDeviceKeys();
     _refreshState();
   }
 
   void clearDeviceFilters() {
     if (_filter.selectedDeviceKeys.isEmpty) return;
     _filter = _filter.copyWith(selectedDeviceKeys: const {});
+    _persistSelectedDeviceKeys();
     _refreshState();
   }
 
   void toggleDeviceVisibility(String key) {
-    final isHidden = _hiddenDeviceKeys.contains(key);
-    setDeviceHidden(key, !isHidden);
+    final currentlyVisible = isDeviceKeyVisible(key);
+    setDeviceHidden(key, currentlyVisible);
   }
 
   void setDeviceHidden(String key, bool isHidden) {
     _repository.setDeviceHidden(key, isHidden);
-    if (isHidden) {
-      _hiddenDeviceKeys.add(key);
-      if (_filter.selectedDeviceKeys.contains(key)) {
-        final updated = Set<String>.from(_filter.selectedDeviceKeys)..remove(key);
-        _filter = _filter.copyWith(selectedDeviceKeys: updated);
-      }
-    } else {
-      _hiddenDeviceKeys.remove(key);
+    _devicePreferences[key] = isHidden;
+    if (isHidden && _filter.selectedDeviceKeys.contains(key)) {
+      final updated = Set<String>.from(_filter.selectedDeviceKeys)..remove(key);
+      _filter = _filter.copyWith(selectedDeviceKeys: updated);
+      _persistSelectedDeviceKeys();
     }
     _refreshState();
   }
 
   void unhideAllDevices() {
     _repository.unhideAllDevices();
-    _hiddenDeviceKeys.clear();
+    _devicePreferences.clear();
     _refreshState();
   }
 
@@ -441,6 +548,39 @@ class SyslogViewModel extends ChangeNotifier {
   /// Updates or assigns a friendly name to a device by MAC address in the shared database.
   void updateDeviceName(String mac, String newName) {
     MacAddressHelper.updateDeviceName(mac, newName);
+    notifyListeners();
+  }
+
+  /// Updates or assigns full device metadata in the shared database
+  void updateDeviceDetails({
+    required String mac,
+    required String name,
+    String? category,
+    String? vendor,
+    String? notes,
+  }) {
+    if (!SharedDeviceDatabase.instance.isInitialized) return;
+    final normalizedMac = SharedDevice.normalizeMac(mac);
+    final existing = SharedDeviceDatabase.instance.getDeviceByMac(normalizedMac);
+    final updated = SharedDevice(
+      macAddress: normalizedMac,
+      name: name.trim(),
+      deviceType: category?.trim(),
+      vendor: vendor?.trim(),
+      notes: notes?.trim(),
+      sourceApp: 'Syslog Server',
+      createdAt: existing?.createdAt ?? DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    SharedDeviceDatabase.instance.upsertDevice(updated);
+
+    // If it was given a custom name and was explicitly hidden before as an unnamed device,
+    // clear the explicit preference so it automatically shows as a known device.
+    if (updated.hasCustomName && _devicePreferences.containsKey(normalizedMac)) {
+      _repository.clearDevicePreference(normalizedMac);
+      _devicePreferences.remove(normalizedMac);
+    }
+
     notifyListeners();
   }
 

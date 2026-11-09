@@ -92,9 +92,14 @@ class SyslogRepository {
     return _db.getSeverityCounts(filter);
   }
 
+  Map<String, bool> getDevicePreferences() => _db.getDevicePreferences();
   Set<String> getHiddenDeviceKeys() => _db.getHiddenDeviceKeys();
   void setDeviceHidden(String deviceKey, bool isHidden) => _db.setDeviceHidden(deviceKey, isHidden);
+  void clearDevicePreference(String deviceKey) => _db.clearDevicePreference(deviceKey);
   void unhideAllDevices() => _db.unhideAllDevices();
+  String? getAppState(String key) => _db.getAppState(key);
+  void setAppState(String key, String value) => _db.setAppState(key, value);
+  void removeAppState(String key) => _db.removeAppState(key);
   Map<String, int> getRemoteIpCounts([SyslogFilterCriteria? filter]) => _db.getRemoteIpCounts(filter);
   Map<String, int> getHostnameCounts([SyslogFilterCriteria? filter]) => _db.getHostnameCounts(filter);
   int getCountForDeviceKey(String key, [SyslogFilterCriteria? filter]) => _db.getCountForDeviceKey(key, filter);
