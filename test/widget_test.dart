@@ -11,8 +11,8 @@ void main() {
     await tester.pumpWidget(const SyslogServerApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('Syslog Server'), findsOneWidget);
+    expect(find.text('SYSLOG SERVER'), findsOneWidget);
     expect(find.text('Start Server'), findsOneWidget);
-    expect(find.text('Demo Logs'), findsOneWidget);
+    expect(find.text('Load Demo'), findsOneWidget);
   });
 }
