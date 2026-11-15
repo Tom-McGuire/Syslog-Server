@@ -2,12 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:network_suite_shared/network_suite_shared.dart';
 import '../../../../data/repositories/syslog_repository.dart';
 import '../../../../data/services/device/mac_address_helper.dart';
 import '../../../../data/services/export/export_service.dart';
 import '../../../../data/services/import/csv_import_service.dart';
+import '../../../../domain/models/launch_adapter_config.dart';
 import '../../../../domain/models/network_adapter_info.dart';
 import '../../../../domain/models/server_status.dart';
 import '../../../../domain/models/syslog_facility.dart';
@@ -16,13 +17,19 @@ import '../../../../domain/models/syslog_record.dart';
 import '../../../../domain/models/syslog_severity.dart';
 
 class SyslogViewModel extends ChangeNotifier {
-  SyslogViewModel({SyslogRepository? repository})
-      : _repository = repository ?? SyslogRepository() {
+  SyslogViewModel({
+    SyslogRepository? repository,
+    this.initialAdapterConfig,
+  }) : _repository = repository ?? SyslogRepository() {
     _init();
   }
 
   final SyslogRepository _repository;
+  final LaunchAdapterConfig? initialAdapterConfig;
+  bool _hasAppliedInitialAdapterOverride = false;
+  bool _isDemoMode = false;
   SyslogRepository get repository => _repository;
+  bool get isDemoMode => _isDemoMode;
 
   StreamSubscription? _batchSubscription;
   StreamSubscription? _statusSubscription;
@@ -262,6 +269,13 @@ class SyslogViewModel extends ChangeNotifier {
     final list = await _repository.getNetworkAdapters();
     if (_isDisposed) return;
     _adapters = list;
+    if (!_hasAppliedInitialAdapterOverride) {
+      _hasAppliedInitialAdapterOverride = true;
+      final matched = initialAdapterConfig?.matchAdapter(_adapters);
+      if (matched != null) {
+        _selectedAdapter = matched;
+      }
+    }
     if (!_adapters.contains(_selectedAdapter)) {
       _selectedAdapter = NetworkAdapterInfo.all;
     }
@@ -462,6 +476,7 @@ class SyslogViewModel extends ChangeNotifier {
   }
 
   void clearLogs() {
+    _isDemoMode = false;
     _repository.clearLogs();
     _logs.clear();
     _selectedRecord = null;
@@ -475,6 +490,21 @@ class SyslogViewModel extends ChangeNotifier {
   void loadDemoLogs() {
     _repository.loadDemoLogs();
     _refreshState();
+  }
+
+  void startDemoWalkthrough() {
+    _isDemoMode = true;
+    _repository.loadDemoLogs();
+    _refreshState();
+    if (_logs.isNotEmpty && _selectedRecord == null) {
+      _selectedRecord = _logs.first;
+    }
+    notifyListeners();
+  }
+
+  void endDemoWalkthrough() {
+    _isDemoMode = false;
+    clearLogs();
   }
 
   Future<CsvImportResult?> importCsvFile({bool replaceExisting = true}) async {

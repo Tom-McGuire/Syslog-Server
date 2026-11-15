@@ -1,10 +1,11 @@
 import 'dart:math';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../../domain/models/syslog_record.dart';
 import '../../../../domain/models/syslog_severity.dart';
+import '../../../theme/app_theme.dart';
 import '../view_models/syslog_view_model.dart';
 import 'device_mac_chip.dart';
 import 'rename_device_dialog.dart';
@@ -183,7 +184,7 @@ class _SyslogTableViewState extends State<SyslogTableView> {
                 : (isListening
                     ? 'Waiting for UDP/TCP packets on port ${vm.serverStatus.port} from network devices.'
                     : 'Start the server above or load demo traffic to inspect sample logs.'),
-            style: const TextStyle(color: Colors.grey, fontSize: 13),
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
@@ -230,7 +231,7 @@ class _SyslogTableViewState extends State<SyslogTableView> {
                 OutlinedButton.icon(
                   icon: const Icon(Icons.auto_awesome, size: 16),
                   label: const Text('Load Demo Logs'),
-                  onPressed: () => vm.loadDemoLogs(),
+                  onPressed: () => vm.startDemoWalkthrough(),
                 ),
               ],
             ),
@@ -391,7 +392,7 @@ class _SyslogTableViewState extends State<SyslogTableView> {
               width: widths[SyslogTableColumn.facility],
               child: Text(
                 record.facility.nameStr,
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -415,7 +416,7 @@ class _SyslogTableViewState extends State<SyslogTableView> {
                   record.customDeviceName ?? record.hostname ?? '-',
                   style: TextStyle(
                     fontSize: 12,
-                    color: record.customDeviceName != null ? Colors.tealAccent : null,
+                    color: record.customDeviceName != null ? AppTheme.teal : null,
                     fontWeight: record.customDeviceName != null ? FontWeight.w600 : null,
                   ),
                   overflow: TextOverflow.ellipsis,
@@ -455,7 +456,7 @@ class _SyslogTableViewState extends State<SyslogTableView> {
                           const SizedBox(width: 4),
                           Text(
                             '+${record.detectedMacs.length - 1}',
-                            style: const TextStyle(fontSize: 10, color: Colors.grey),
+                            style: TextStyle(fontSize: 10, color: AppTheme.textSecondary),
                           ),
                         ],
                         const SizedBox(width: 8),
@@ -516,7 +517,7 @@ class _SyslogTableViewState extends State<SyslogTableView> {
           const SizedBox(width: 8),
           Text(
             'Loading more logs... ($currentCount of ${vm.totalLogCount} loaded)',
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
+            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
           ),
         ],
       ),
@@ -537,9 +538,9 @@ class _SyslogTableViewState extends State<SyslogTableView> {
           ),
           if (vm.hasMoreLogs) ...[
             const SizedBox(width: 8),
-            const Text(
+            Text(
               '• Scroll down to load next batch of 1,000',
-              style: TextStyle(fontSize: 11, color: Colors.grey),
+              style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
             ),
           ],
           if (vm.loadedFileName != null) ...[
@@ -565,14 +566,14 @@ class _SyslogTableViewState extends State<SyslogTableView> {
                   Icon(
                     vm.autoScroll ? Icons.lock_clock : Icons.pause_circle_outline,
                     size: 14,
-                    color: vm.autoScroll ? Colors.green : Colors.grey,
+                    color: vm.autoScroll ? AppTheme.success : AppTheme.textSecondary,
                   ),
                   const SizedBox(width: 4),
                   Text(
                     vm.autoScroll ? 'Live Stream Active' : 'Live Stream Paused',
                     style: TextStyle(
                       fontSize: 11,
-                      color: vm.autoScroll ? Colors.green : Colors.grey,
+                      color: vm.autoScroll ? AppTheme.success : AppTheme.textSecondary,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -650,7 +651,7 @@ class _SyslogTableViewState extends State<SyslogTableView> {
               value: 'rename_mac_$mac',
               child: Row(
                 children: [
-                  const Icon(Icons.edit_note, size: 16, color: Colors.tealAccent),
+                  Icon(Icons.edit_note, size: 16, color: AppTheme.teal),
                   const SizedBox(width: 8),
                   Expanded(child: Text('Rename Device ($mac)', overflow: TextOverflow.ellipsis)),
                 ],

@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:network_suite_shared/network_suite_shared.dart';
 import 'package:provider/provider.dart';
+import '../../../theme/app_theme.dart';
 import '../view_models/syslog_view_model.dart';
 
 /// Modal dialog allowing the user to view and edit full device details
@@ -80,9 +81,12 @@ class _EditDeviceDialogState extends State<EditDeviceDialog> {
     final targetMac = _isNewDevice ? _macCtrl.text.trim() : widget.macAddress.trim();
     if (!SharedDevice.isValidMac(targetMac)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Invalid MAC address format (must be 6 hex bytes, e.g. 00:11:22:33:44:55)'),
-          backgroundColor: Colors.redAccent,
+        SnackBar(
+          content: const Text(
+            'Invalid MAC address format (must be 6 hex bytes, e.g. 00:11:22:33:44:55)',
+            style: TextStyle(color: Colors.white),
+          ),
+          backgroundColor: AppTheme.error,
         ),
       );
       return;
@@ -117,8 +121,11 @@ class _EditDeviceDialogState extends State<EditDeviceDialog> {
     final cat = DeviceCategory.fromKey(_selectedCategoryKey);
 
     return Dialog(
-      backgroundColor: const Color(0xFF1E1E1E),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      backgroundColor: AppTheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: AppTheme.border),
+      ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
         child: Padding(
@@ -141,10 +148,10 @@ class _EditDeviceDialogState extends State<EditDeviceDialog> {
                     Expanded(
                       child: Text(
                         _isNewDevice ? 'Add Device to Shared Library' : 'Edit Device in Shared Library',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: AppTheme.textPrimary,
                         ),
                       ),
                     ),
@@ -161,22 +168,22 @@ class _EditDeviceDialogState extends State<EditDeviceDialog> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF252526),
+                      color: AppTheme.surfaceHigh,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF3E3E42)),
+                      border: Border.all(color: AppTheme.inputBorder),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.memory, size: 16, color: Colors.grey),
+                        Icon(Icons.memory, size: 16, color: AppTheme.textSecondary),
                         const SizedBox(width: 8),
-                        const Text('MAC: ', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        Text('MAC: ', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
                         Text(
                           widget.macAddress,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
                             fontFamily: 'monospace',
                             fontWeight: FontWeight.bold,
-                            color: Colors.white70,
+                            color: AppTheme.textPrimary,
                           ),
                         ),
                       ],
@@ -227,7 +234,7 @@ class _EditDeviceDialogState extends State<EditDeviceDialog> {
                 // Category Selector Dropdown
                 DropdownButtonFormField<String>(
                   initialValue: _selectedCategoryKey,
-                  dropdownColor: const Color(0xFF252526),
+                  dropdownColor: AppTheme.surfaceElevated,
                   decoration: const InputDecoration(
                     labelText: 'Device Category',
                     prefixIcon: Icon(Icons.category_outlined, size: 18),

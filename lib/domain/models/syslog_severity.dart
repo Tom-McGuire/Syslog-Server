@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 enum SyslogSeverity {
   emergency(0, 'Emergency', 'System is unusable', Color(0xFFD32F2F)),

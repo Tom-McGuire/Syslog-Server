@@ -14,7 +14,10 @@ import '../services/network/network_adapter_service.dart';
 class SyslogRepository {
   SyslogRepository({
     SyslogDatabaseService? databaseService,
-  }) : _db = databaseService ?? SyslogDatabaseService() {
+    Future<List<NetworkAdapterInfo>> Function()? adapterProvider,
+  })  : _db = databaseService ?? SyslogDatabaseService(),
+        _adapterProvider =
+            adapterProvider ?? NetworkAdapterService.getAvailableAdapters {
     _listener = SyslogListenerService(
       onBatchReceived: _handleBatchReceived,
       onStatusChanged: _handleStatusChanged,
@@ -22,6 +25,7 @@ class SyslogRepository {
   }
 
   final SyslogDatabaseService _db;
+  final Future<List<NetworkAdapterInfo>> Function() _adapterProvider;
   late final SyslogListenerService _listener;
   String? _loadedFileName;
 
@@ -37,7 +41,7 @@ class SyslogRepository {
   String? get loadedFileName => _loadedFileName;
 
   Future<List<NetworkAdapterInfo>> getNetworkAdapters() {
-    return NetworkAdapterService.getAvailableAdapters();
+    return _adapterProvider();
   }
 
   void _handleBatchReceived(List<SyslogRecord> rawBatch) {

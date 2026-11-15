@@ -1,12 +1,20 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../../domain/models/network_adapter_info.dart';
+import '../../../theme/app_theme.dart';
 import '../view_models/syslog_view_model.dart';
 import 'device_filter_management_dialog.dart';
 
 class SyslogControlBar extends StatefulWidget {
-  const SyslogControlBar({super.key});
+  const SyslogControlBar({
+    super.key,
+    this.zone2Key,
+    this.zone3Key,
+  });
+
+  final GlobalKey? zone2Key;
+  final GlobalKey? zone3Key;
 
   @override
   State<SyslogControlBar> createState() => _SyslogControlBarState();
@@ -30,17 +38,18 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
     final lastError = vm.serverStatus.lastError;
     final loadedFileName = vm.loadedFileName;
     final isImporting = vm.isImporting;
+    final isDemo = vm.isDemoMode;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           height: 52,
-          decoration: const BoxDecoration(
-            color: Color(0xFF1E1E1E),
+          decoration: BoxDecoration(
+            color: AppTheme.surface,
             border: Border(
               bottom: BorderSide(
-                color: Color(0xFF2C2C2C),
+                color: AppTheme.border,
                 width: 1,
               ),
             ),
@@ -73,7 +82,7 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
                               ),
                             ),
                             const SizedBox(width: 10),
-                            const Column(
+                            Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -83,41 +92,49 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
                                     letterSpacing: 0.8,
-                                    color: Colors.white,
+                                    color: AppTheme.textPrimary,
                                   ),
                                 ),
                                 Text(
                                   'RFC 3164/5424 Receiver',
-                                  style: TextStyle(fontSize: 10, color: Colors.white54),
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: AppTheme.textSecondary,
+                                  ),
                                 ),
                               ],
                             ),
                             const SizedBox(width: 16),
 
                             // ==================== ZONE 2: INTERFACE & TARGET ====================
-                            // Network Interface Selector
-                            Container(
-                              height: 32,
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF252526),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: const Color(0xFF3E3E42)),
-                              ),
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<NetworkAdapterInfo>(
-                                  value: vm.adapters.contains(vm.selectedAdapter)
-                                      ? vm.selectedAdapter
-                                      : vm.adapters.first,
-                                  isDense: true,
-                                  icon: const Icon(Icons.arrow_drop_down, size: 18),
-                                  style: const TextStyle(fontSize: 12, color: Colors.white),
-                                  dropdownColor: const Color(0xFF252526),
-                                  onChanged: isListening
-                                      ? null
-                                      : (adapter) {
-                                          if (adapter != null) vm.selectAdapter(adapter);
-                                        },
+                            Row(
+                              key: widget.zone2Key,
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                // Network Interface Selector
+                                Container(
+                                  height: 32,
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.surfaceHigh,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: AppTheme.inputBorder),
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<NetworkAdapterInfo>(
+                                      value: vm.adapters.contains(vm.selectedAdapter)
+                                          ? vm.selectedAdapter
+                                          : vm.adapters.first,
+                                      isDense: true,
+                                      icon: const Icon(Icons.arrow_drop_down, size: 18),
+                                      style: TextStyle(fontSize: 12, color: AppTheme.textPrimary),
+                                      dropdownColor: AppTheme.surfaceHigh,
+                                      onChanged: isListening
+                                          ? null
+                                          : (adapter) {
+                                              if (adapter != null) vm.selectAdapter(adapter);
+                                            },
                                   items: vm.adapters.map((adapter) {
                                     IconData icon = Icons.lan_outlined;
                                     if (adapter.isAllInterfaces) {
@@ -170,100 +187,103 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
                             ),
                             const SizedBox(width: 12),
 
-                            // Port configuration
-                            const Text('Port:', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                            const SizedBox(width: 6),
-                            Container(
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: isListening ? const Color(0xFF1E1E1E) : const Color(0xFF252526),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: const Color(0xFF3E3E42)),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  SizedBox(
-                                    width: 54,
-                                    child: TextField(
-                                      controller: _portController,
-                                      enabled: !isListening,
-                                      keyboardType: TextInputType.number,
-                                      textAlignVertical: TextAlignVertical.center,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontFamily: 'monospace',
-                                        color: isListening ? Colors.grey : Colors.white,
-                                      ),
-                                      decoration: const InputDecoration(
-                                        isDense: true,
-                                        border: InputBorder.none,
-                                        enabledBorder: InputBorder.none,
-                                        focusedBorder: InputBorder.none,
-                                        contentPadding: EdgeInsets.symmetric(horizontal: 8),
-                                      ),
-                                    ),
-                                  ),
-                                  if (!isListening)
-                                    PopupMenuButton<int>(
-                                      tooltip: 'Port presets',
-                                      padding: EdgeInsets.zero,
-                                      child: const Padding(
-                                        padding: EdgeInsets.only(right: 6, left: 2),
-                                        child: Icon(Icons.arrow_drop_down, size: 18, color: Colors.grey),
-                                      ),
-                                      onSelected: (port) {
-                                        setState(() {
-                                          _portController.text = port.toString();
-                                        });
-                                      },
-                                      itemBuilder: (context) => const [
-                                        PopupMenuItem(value: 514, child: Text('514 (Standard Syslog)')),
-                                        PopupMenuItem(value: 1514, child: Text('1514 (Unprivileged Syslog)')),
-                                        PopupMenuItem(value: 5140, child: Text('5140 (Alternative Syslog)')),
-                                      ],
-                                    )
-                                  else
-                                    const SizedBox(width: 8),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-
-                            // Protocol Checkboxes
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Checkbox(
-                                  value: _enableUdp,
-                                  visualDensity: VisualDensity.compact,
-                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  onChanged: isListening
-                                      ? null
-                                      : (val) {
-                                          if (val != null) setState(() => _enableUdp = val);
-                                        },
-                                ),
-                                const Text('UDP', style: TextStyle(fontSize: 12)),
+                                // Port configuration
+                                Text('Port:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
                                 const SizedBox(width: 6),
-                                Checkbox(
-                                  value: _enableTcp,
-                                  visualDensity: VisualDensity.compact,
-                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  onChanged: isListening
-                                      ? null
-                                      : (val) {
-                                          if (val != null) setState(() => _enableTcp = val);
-                                        },
+                                Container(
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: isListening ? AppTheme.surface : AppTheme.surfaceHigh,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: AppTheme.inputBorder),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      SizedBox(
+                                        width: 54,
+                                        child: TextField(
+                                          controller: _portController,
+                                          enabled: !isListening,
+                                          keyboardType: TextInputType.number,
+                                          textAlignVertical: TextAlignVertical.center,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontFamily: 'monospace',
+                                            color: isListening ? AppTheme.textMuted : AppTheme.textPrimary,
+                                          ),
+                                          decoration: const InputDecoration(
+                                            isDense: true,
+                                            border: InputBorder.none,
+                                            enabledBorder: InputBorder.none,
+                                            focusedBorder: InputBorder.none,
+                                            contentPadding: EdgeInsets.symmetric(horizontal: 8),
+                                          ),
+                                        ),
+                                      ),
+                                      if (!isListening)
+                                        PopupMenuButton<int>(
+                                          tooltip: 'Port presets',
+                                          padding: EdgeInsets.zero,
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(right: 6, left: 2),
+                                            child: Icon(Icons.arrow_drop_down, size: 18, color: AppTheme.textSecondary),
+                                          ),
+                                          onSelected: (port) {
+                                            setState(() {
+                                              _portController.text = port.toString();
+                                            });
+                                          },
+                                          itemBuilder: (context) => const [
+                                            PopupMenuItem(value: 514, child: Text('514 (Standard Syslog)')),
+                                            PopupMenuItem(value: 1514, child: Text('1514 (Unprivileged Syslog)')),
+                                            PopupMenuItem(value: 5140, child: Text('5140 (Alternative Syslog)')),
+                                          ],
+                                        )
+                                      else
+                                        const SizedBox(width: 8),
+                                    ],
+                                  ),
                                 ),
-                                const Text('TCP', style: TextStyle(fontSize: 12)),
+                                const SizedBox(width: 10),
+
+                                // Protocol Checkboxes
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Checkbox(
+                                      value: _enableUdp,
+                                      visualDensity: VisualDensity.compact,
+                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      onChanged: isListening
+                                          ? null
+                                          : (val) {
+                                              if (val != null) setState(() => _enableUdp = val);
+                                            },
+                                    ),
+                                    const Text('UDP', style: TextStyle(fontSize: 12)),
+                                    const SizedBox(width: 6),
+                                    Checkbox(
+                                      value: _enableTcp,
+                                      visualDensity: VisualDensity.compact,
+                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      onChanged: isListening
+                                          ? null
+                                          : (val) {
+                                              if (val != null) setState(() => _enableTcp = val);
+                                            },
+                                    ),
+                                    const Text('TCP', style: TextStyle(fontSize: 12)),
+                                  ],
+                                ),
                               ],
                             ),
                             const SizedBox(width: 16),
 
                             // ==================== ZONE 3: PRIMARY ACTIONS ====================
                             FilledButton.icon(
+                              key: widget.zone3Key,
                               onPressed: () {
                                 if (isListening) {
                                   vm.stopServer();
@@ -333,9 +353,9 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
                                     InkWell(
                                       onTap: () => vm.closeLoadedFile(),
                                       borderRadius: BorderRadius.circular(10),
-                                      child: const Padding(
-                                        padding: EdgeInsets.all(2),
-                                        child: Icon(Icons.close, size: 12, color: Colors.grey),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(2),
+                                        child: Icon(Icons.close, size: 12, color: AppTheme.textSecondary),
                                       ),
                                     ),
                                   ],
@@ -374,13 +394,30 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
                             ),
                             const SizedBox(width: 8),
 
-                            // Load Demo Button (Icons.play_circle_outline)
+                            // Load Demo / Exit Demo Button
                             OutlinedButton.icon(
-                              onPressed: isListening ? null : () => vm.loadDemoLogs(),
-                              icon: const Icon(Icons.play_circle_outline, size: 15),
-                              label: const Text('Load Demo', style: TextStyle(fontSize: 11)),
+                              onPressed: (!isDemo && isListening)
+                                  ? null
+                                  : (isDemo
+                                      ? () => vm.endDemoWalkthrough()
+                                      : () => vm.startDemoWalkthrough()),
+                              icon: Icon(
+                                isDemo ? Icons.stop_circle_outlined : Icons.play_circle_outline,
+                                size: 15,
+                                color: isDemo ? AppTheme.warning : null,
+                              ),
+                              label: Text(
+                                isDemo ? 'Exit Demo' : 'Load Demo',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDemo ? AppTheme.warning : null,
+                                ),
+                              ),
                               style: OutlinedButton.styleFrom(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                side: isDemo
+                                    ? BorderSide(color: AppTheme.warning.withValues(alpha: 0.7))
+                                    : null,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                               ),
                             ),
@@ -393,7 +430,7 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
                               icon: const Icon(Icons.delete_sweep_outlined, size: 15),
                               label: const Text('Clear', style: TextStyle(fontSize: 11)),
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.red.shade300,
+                                foregroundColor: AppTheme.isDark ? Colors.red.shade300 : AppTheme.error,
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                               ),
@@ -449,8 +486,8 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(
                                     color: vm.logs.isNotEmpty
-                                        ? const Color(0xFF3E3E42)
-                                        : const Color(0xFF2C2C2C),
+                                        ? AppTheme.inputBorder
+                                        : AppTheme.border,
                                   ),
                                 ),
                                 child: Row(
@@ -459,20 +496,26 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
                                     Icon(
                                       Icons.download,
                                       size: 15,
-                                      color: vm.logs.isNotEmpty ? Colors.white70 : Colors.grey,
+                                      color: vm.logs.isNotEmpty
+                                          ? (AppTheme.isDark ? Colors.white70 : AppTheme.textPrimary)
+                                          : AppTheme.textMuted,
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
                                       'Export',
                                       style: TextStyle(
                                         fontSize: 11,
-                                        color: vm.logs.isNotEmpty ? Colors.white70 : Colors.grey,
+                                        color: vm.logs.isNotEmpty
+                                            ? (AppTheme.isDark ? Colors.white70 : AppTheme.textPrimary)
+                                            : AppTheme.textMuted,
                                       ),
                                     ),
                                     Icon(
                                       Icons.arrow_drop_down,
                                       size: 14,
-                                      color: vm.logs.isNotEmpty ? Colors.white70 : Colors.grey,
+                                      color: vm.logs.isNotEmpty
+                                          ? (AppTheme.isDark ? Colors.white70 : AppTheme.textPrimary)
+                                          : AppTheme.textMuted,
                                     ),
                                   ],
                                 ),
@@ -573,7 +616,10 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.error,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () {
               Navigator.of(ctx).pop();
               vm.clearLogs();

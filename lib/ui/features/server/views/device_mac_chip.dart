@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../../data/services/device/mac_address_helper.dart';
+import '../../../theme/app_theme.dart';
 import '../view_models/syslog_view_model.dart';
 import 'rename_device_dialog.dart';
 
@@ -122,12 +123,12 @@ class DeviceMacChip extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
             decoration: BoxDecoration(
               color: hasCustomName
-                  ? Colors.teal.withValues(alpha: 0.16)
+                  ? AppTheme.teal.withValues(alpha: AppTheme.isDark ? 0.16 : 0.12)
                   : theme.colorScheme.primaryContainer.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(4),
               border: Border.all(
                 color: hasCustomName
-                    ? Colors.teal.withValues(alpha: 0.5)
+                    ? AppTheme.teal.withValues(alpha: 0.5)
                     : theme.colorScheme.primary.withValues(alpha: 0.35),
                 width: 1,
               ),
@@ -138,7 +139,7 @@ class DeviceMacChip extends StatelessWidget {
                 Icon(
                   category.icon,
                   size: 11,
-                  color: hasCustomName ? Colors.tealAccent : theme.colorScheme.primary,
+                  color: hasCustomName ? AppTheme.teal : theme.colorScheme.primary,
                 ),
                 const SizedBox(width: 4),
                 Text(
@@ -146,7 +147,7 @@ class DeviceMacChip extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: hasCustomName ? Colors.tealAccent : theme.colorScheme.onSurface,
+                    color: hasCustomName ? AppTheme.teal : AppTheme.textPrimary,
                   ),
                 ),
               ],
@@ -167,13 +168,13 @@ class DeviceMacChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
             color: hasCustomName
-                ? Colors.teal.withValues(alpha: 0.15)
+                ? AppTheme.teal.withValues(alpha: AppTheme.isDark ? 0.15 : 0.10)
                 : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
               color: hasCustomName
-                  ? Colors.teal.withValues(alpha: 0.45)
-                  : theme.dividerColor.withValues(alpha: 0.6),
+                  ? AppTheme.teal.withValues(alpha: 0.45)
+                  : AppTheme.border,
               width: 1,
             ),
           ),
@@ -183,7 +184,7 @@ class DeviceMacChip extends StatelessWidget {
               Icon(
                 category.icon,
                 size: 15,
-                color: hasCustomName ? Colors.tealAccent : theme.colorScheme.primary,
+                color: hasCustomName ? AppTheme.teal : theme.colorScheme.primary,
               ),
               const SizedBox(width: 6),
               Column(
@@ -198,12 +199,12 @@ class DeviceMacChip extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: hasCustomName ? Colors.tealAccent : theme.colorScheme.onSurface,
+                          color: hasCustomName ? AppTheme.teal : AppTheme.textPrimary,
                         ),
                       ),
                       if (hasCustomName) ...[
                         const SizedBox(width: 4),
-                        Icon(Icons.check_circle, size: 11, color: Colors.tealAccent.withValues(alpha: 0.8)),
+                        Icon(Icons.check_circle, size: 11, color: AppTheme.teal.withValues(alpha: 0.8)),
                       ],
                     ],
                   ),
@@ -212,7 +213,7 @@ class DeviceMacChip extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 10,
                       fontFamily: 'monospace',
-                      color: theme.colorScheme.onSurfaceVariant,
+                      color: AppTheme.textSecondary,
                     ),
                   ),
                 ],
@@ -221,7 +222,7 @@ class DeviceMacChip extends StatelessWidget {
               Icon(
                 Icons.edit,
                 size: 12,
-                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                color: AppTheme.textMuted,
               ),
             ],
           ),

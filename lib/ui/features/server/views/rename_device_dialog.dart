@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 import '../../../../data/services/device/mac_address_helper.dart';
 import '../view_models/syslog_view_model.dart';

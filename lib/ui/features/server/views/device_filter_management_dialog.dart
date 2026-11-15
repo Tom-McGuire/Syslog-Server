@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:network_suite_shared/network_suite_shared.dart';
 import 'package:provider/provider.dart';
+import '../../../theme/app_theme.dart';
 import '../view_models/syslog_view_model.dart';
 import 'edit_device_dialog.dart';
 
@@ -66,8 +67,11 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
     final unknownDevices = matchingDevices.where((d) => !d.hasCustomName).toList();
 
     return Dialog(
-      backgroundColor: const Color(0xFF1E1E1E),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      backgroundColor: AppTheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: AppTheme.border),
+      ),
       insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 720, maxHeight: 640),
@@ -92,17 +96,17 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Custom Library',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            color: AppTheme.textPrimary,
                           ),
                         ),
                         Text(
                           'Manage known and unknown devices in the shared database and configure filter visibility.',
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+                          style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                         ),
                       ],
                     ),
@@ -140,7 +144,7 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
                 height: 36,
                 child: TextField(
                   controller: _searchController,
-                  style: const TextStyle(fontSize: 12),
+                  style: TextStyle(fontSize: 12, color: AppTheme.textPrimary),
                   onChanged: (val) => setState(() => _searchQuery = val.trim()),
                   decoration: InputDecoration(
                     hintText: 'Search devices by name, MAC, vendor, or notes...',
@@ -155,15 +159,19 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
                           )
                         : null,
                     filled: true,
-                    fillColor: const Color(0xFF252526),
+                    fillColor: AppTheme.surfaceHigh,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFF3E3E42)),
+                      borderSide: BorderSide(color: AppTheme.inputBorder),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFF3E3E42)),
+                      borderSide: BorderSide(color: AppTheme.inputBorder),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: AppTheme.accent, width: 1.5),
                     ),
                   ),
                 ),
@@ -174,6 +182,8 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
               TabBar(
                 controller: _tabController,
                 indicatorColor: theme.colorScheme.primary,
+                labelColor: theme.colorScheme.primary,
+                unselectedLabelColor: AppTheme.textSecondary,
                 tabs: [
                   Tab(
                     child: Row(
@@ -230,7 +240,7 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
             Icon(
               isKnownTab ? Icons.devices : Icons.device_unknown,
               size: 40,
-              color: Colors.grey.shade600,
+              color: AppTheme.textMuted,
             ),
             const SizedBox(height: 10),
             Text(
@@ -239,7 +249,7 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
                   : isKnownTab
                       ? 'No known devices with custom names in database.'
                       : 'No unknown devices in database.',
-              style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
             ),
           ],
         ),
@@ -261,12 +271,12 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFF252526),
+              color: AppTheme.surfaceHigh,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                 color: isVisible
                     ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.35)
-                    : const Color(0xFF3E3E42),
+                    : AppTheme.inputBorder,
               ),
             ),
             child: Row(
@@ -276,11 +286,11 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
                   radius: 16,
                   backgroundColor: isVisible
                       ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)
-                      : Colors.grey.withValues(alpha: 0.2),
+                      : AppTheme.textMuted.withValues(alpha: 0.2),
                   child: Icon(
                     device.category.icon,
                     size: 16,
-                    color: isVisible ? Theme.of(context).colorScheme.primary : Colors.grey,
+                    color: isVisible ? Theme.of(context).colorScheme.primary : AppTheme.textMuted,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -295,10 +305,10 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
                           Flexible(
                             child: Text(
                               device.name,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
-                                color: Colors.white,
+                                color: AppTheme.textPrimary,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -308,14 +318,14 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                                color: AppTheme.success.withValues(alpha: AppTheme.isDark ? 0.2 : 0.14),
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              child: const Text(
+                              child: Text(
                                 'Custom Name',
                                 style: TextStyle(
                                   fontSize: 10,
-                                  color: Color(0xFF10B981),
+                                  color: AppTheme.success,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -324,14 +334,14 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                               decoration: BoxDecoration(
-                                color: Colors.amber.withValues(alpha: 0.2),
+                                color: AppTheme.warning.withValues(alpha: AppTheme.isDark ? 0.2 : 0.14),
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              child: const Text(
+                              child: Text(
                                 'No Custom Name',
                                 style: TextStyle(
                                   fontSize: 10,
-                                  color: Colors.amber,
+                                  color: AppTheme.warning,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -341,14 +351,14 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                               decoration: BoxDecoration(
-                                color: Colors.grey.withValues(alpha: 0.2),
+                                color: AppTheme.textMuted.withValues(alpha: 0.18),
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              child: const Text(
+                              child: Text(
                                 'Hidden from Filters',
                                 style: TextStyle(
                                   fontSize: 10,
-                                  color: Colors.grey,
+                                  color: AppTheme.textSecondary,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -359,14 +369,14 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                               decoration: BoxDecoration(
-                                color: Colors.blueAccent.withValues(alpha: 0.2),
+                                color: AppTheme.info.withValues(alpha: AppTheme.isDark ? 0.2 : 0.14),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
                                 '$count logs',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 10,
-                                  color: Colors.blueAccent,
+                                  color: AppTheme.info,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -377,10 +387,10 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
                       const SizedBox(height: 2),
                       Text(
                         '${device.macAddress} • ${device.vendor ?? "Unknown Vendor"} • ${device.category.label}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
                           fontFamily: 'monospace',
-                          color: Colors.grey,
+                          color: AppTheme.textSecondary,
                         ),
                       ),
                       if (device.notes != null && device.notes!.trim().isNotEmpty) ...[
@@ -390,7 +400,7 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
                           style: TextStyle(
                             fontSize: 11,
                             fontStyle: FontStyle.italic,
-                            color: Colors.grey.shade400,
+                            color: AppTheme.textSecondary,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -405,7 +415,7 @@ class _DeviceFilterManagementDialogState extends State<DeviceFilterManagementDia
                   icon: Icon(
                     isVisible ? Icons.visibility : Icons.visibility_off,
                     size: 18,
-                    color: isVisible ? Theme.of(context).colorScheme.primary : Colors.grey,
+                    color: isVisible ? Theme.of(context).colorScheme.primary : AppTheme.textMuted,
                   ),
                   tooltip: isVisible
                       ? 'Visible in filter bar (Click to hide)'

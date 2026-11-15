@@ -1,10 +1,11 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:network_suite_shared/network_suite_shared.dart';
 import 'package:provider/provider.dart';
 import '../../../../domain/models/syslog_facility.dart';
 import '../../../../domain/models/syslog_severity.dart';
+import '../../../theme/app_theme.dart';
 import '../view_models/syslog_view_model.dart';
 import 'edit_device_dialog.dart';
 
@@ -228,13 +229,13 @@ class _SyslogFilterBarState extends State<SyslogFilterBar> {
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFF3E3E42)),
-                    color: const Color(0xFF252526),
+                    border: Border.all(color: AppTheme.inputBorder),
+                    color: AppTheme.surfaceHigh,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.category_outlined, size: 16, color: Colors.grey),
+                      Icon(Icons.category_outlined, size: 16, color: AppTheme.textSecondary),
                       const SizedBox(width: 6),
                       Text(
                         filter.selectedFacilities.isEmpty
@@ -272,9 +273,9 @@ class _SyslogFilterBarState extends State<SyslogFilterBar> {
                   border: Border.all(
                     color: vm.showAutoDetected
                         ? Theme.of(context).colorScheme.primary
-                        : const Color(0xFF3E3E42),
+                        : AppTheme.inputBorder,
                   ),
-                  color: const Color(0xFF252526),
+                  color: AppTheme.surfaceHigh,
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -284,7 +285,7 @@ class _SyslogFilterBarState extends State<SyslogFilterBar> {
                       size: 16,
                       color: vm.showAutoDetected
                           ? Theme.of(context).colorScheme.primary
-                          : Colors.grey,
+                          : AppTheme.textSecondary,
                     ),
                     const SizedBox(width: 6),
                     const Text(
@@ -394,14 +395,16 @@ class _SyslogFilterBarState extends State<SyslogFilterBar> {
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            color: isSelected ? Colors.white : Colors.grey.shade300,
+                            color: isSelected
+                                ? (AppTheme.isDark ? Colors.white : AppTheme.textPrimary)
+                                : AppTheme.textPrimary,
                           ),
                         ),
                         tooltip: 'Device: ${device.name}\nMAC: ${device.macAddress}${device.vendor != null ? '\nVendor: ${device.vendor}' : ''}\n(Right-click for options)',
                         selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.35),
-                        backgroundColor: const Color(0xFF252526),
+                        backgroundColor: AppTheme.surfaceHigh,
                         side: BorderSide(
-                          color: isSelected ? Theme.of(context).colorScheme.primary : const Color(0xFF3E3E42),
+                          color: isSelected ? Theme.of(context).colorScheme.primary : AppTheme.inputBorder,
                           width: 1,
                         ),
                         onSelected: (_) => vm.toggleDeviceFilter(device.macAddress),
@@ -419,8 +422,8 @@ class _SyslogFilterBarState extends State<SyslogFilterBar> {
                     tooltip: 'Add new device to Shared Device Library',
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     visualDensity: VisualDensity.compact,
-                    backgroundColor: const Color(0xFF252526),
-                    side: const BorderSide(color: Color(0xFF3E3E42)),
+                    backgroundColor: AppTheme.surfaceHigh,
+                    side: BorderSide(color: AppTheme.inputBorder),
                     onPressed: () {
                       EditDeviceDialog.show(context, macAddress: '');
                     },
@@ -464,14 +467,16 @@ class _SyslogFilterBarState extends State<SyslogFilterBar> {
                             fontFamily: 'monospace',
                             fontSize: 11,
                             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            color: isSelected ? Colors.white : Colors.grey.shade300,
+                            color: isSelected
+                                ? (AppTheme.isDark ? Colors.white : AppTheme.textPrimary)
+                                : AppTheme.textPrimary,
                           ),
                         ),
                         tooltip: 'Auto-Detected Source: $src\n(Right-click for options)',
                         selectedColor: Colors.blueAccent.withValues(alpha: 0.35),
-                        backgroundColor: const Color(0xFF252526),
+                        backgroundColor: AppTheme.surfaceHigh,
                         side: BorderSide(
-                          color: isSelected ? Colors.blueAccent : const Color(0xFF3E3E42),
+                          color: isSelected ? Colors.blueAccent : AppTheme.inputBorder,
                           width: 1,
                         ),
                         onSelected: (_) => vm.toggleDeviceFilter(src),
@@ -535,13 +540,15 @@ class _SyslogFilterBarState extends State<SyslogFilterBar> {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        color: isSelected ? Colors.white : Colors.grey.shade400,
+                        color: isSelected
+                            ? (AppTheme.isDark ? Colors.white : AppTheme.textPrimary)
+                            : AppTheme.textSecondary,
                       ),
                     ),
                     selectedColor: sev.color.withValues(alpha: 0.35),
-                    backgroundColor: const Color(0xFF252526),
+                    backgroundColor: AppTheme.surfaceHigh,
                     side: BorderSide(
-                      color: isSelected ? sev.color : const Color(0xFF3E3E42),
+                      color: isSelected ? sev.color : AppTheme.inputBorder,
                       width: 1,
                     ),
                     onSelected: (_) => vm.toggleSeverity(sev),

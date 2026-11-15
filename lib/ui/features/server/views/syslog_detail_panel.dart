@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../../theme/app_theme.dart';
 import '../view_models/syslog_view_model.dart';
 import 'device_mac_chip.dart';
 
@@ -58,12 +59,20 @@ class SyslogDetailPanel extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   'Log Entry #${record.id ?? ""}',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: AppTheme.textPrimary,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Text(
                   timeFormatter.format(record.receivedAt),
-                  style: const TextStyle(color: Colors.grey, fontSize: 12, fontFamily: 'monospace'),
+                  style: TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                  ),
                 ),
                 const Spacer(),
                 IconButton(
@@ -131,16 +140,20 @@ class SyslogDetailPanel extends StatelessWidget {
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        const Icon(Icons.devices, size: 14, color: Colors.tealAccent),
+                        Icon(Icons.devices, size: 14, color: AppTheme.teal),
                         const SizedBox(width: 6),
-                        const Text(
+                        Text(
                           'HARDWARE IDENTITY & SHARED DEVICES',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.tealAccent),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.teal,
+                          ),
                         ),
                         const SizedBox(width: 8),
                         Text(
                           '(${record.detectedMacs.length} detected)',
-                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
                         ),
                       ],
                     ),
@@ -159,37 +172,49 @@ class SyslogDetailPanel extends StatelessWidget {
                   const SizedBox(height: 12),
 
                   // Message Section
-                  const Text(
+                  Text(
                     'PARSED MESSAGE',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   SelectableText(
                     record.message.isEmpty ? '(Empty message body)' : record.message,
-                    style: const TextStyle(fontSize: 13, height: 1.4),
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: AppTheme.textPrimary,
+                    ),
                   ),
                   const SizedBox(height: 14),
 
                   // Raw Payload Section
-                  const Text(
+                  Text(
                     'RAW SYSLOG PACKET',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF141414),
+                      color: AppTheme.scaffoldBg,
                       borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: const Color(0xFF2C2C2C)),
+                      border: Border.all(color: AppTheme.border),
                     ),
                     child: SelectableText(
                       record.rawPayload,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'monospace',
                         fontSize: 12,
-                        color: Color(0xFFD4D4D4),
+                        color: AppTheme.textPrimary,
                       ),
                     ),
                   ),
@@ -209,12 +234,20 @@ class SyslogDetailPanel extends StatelessWidget {
       children: [
         Text(
           label.toUpperCase(),
-          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.grey),
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textSecondary,
+          ),
         ),
         const SizedBox(height: 2),
         Text(
           value,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: AppTheme.textPrimary,
+          ),
         ),
       ],
     );
