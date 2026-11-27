@@ -12,6 +12,7 @@ class CsvImportResult {
     required this.totalLines,
     required this.importedCount,
     required this.skippedCount,
+    this.duplicateCount = 0,
     this.detectedFormat = 'CSV',
     this.updatedDevicesCount = 0,
     this.deviceMappings = const {},
@@ -21,6 +22,7 @@ class CsvImportResult {
   final int totalLines;
   final int importedCount;
   final int skippedCount;
+  final int duplicateCount;
   final String detectedFormat;
   final int updatedDevicesCount;
   final Map<String, String> deviceMappings;

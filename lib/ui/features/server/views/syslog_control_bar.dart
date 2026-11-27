@@ -590,11 +590,16 @@ class _SyslogControlBarState extends State<SyslogControlBar> {
       final devicesMsg = result.updatedDevicesCount > 0
           ? ' and updated ${result.updatedDevicesCount} device(s) in shared database'
           : '';
+      final notes = <String>[
+        if (result.duplicateCount > 0)
+          '${result.duplicateCount} duplicate${result.duplicateCount == 1 ? '' : 's'} skipped',
+        if (result.skippedCount > 0) '${result.skippedCount} skipped',
+      ];
+      final notesSuffix = notes.isNotEmpty ? ' [${notes.join(', ')}]' : '';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Imported ${result.importedCount} logs$devicesMsg (${result.detectedFormat})'
-            '${result.skippedCount > 0 ? ' [${result.skippedCount} skipped]' : ''}',
+            'Imported ${result.importedCount} logs$devicesMsg (${result.detectedFormat})$notesSuffix',
           ),
           duration: const Duration(seconds: 3),
         ),

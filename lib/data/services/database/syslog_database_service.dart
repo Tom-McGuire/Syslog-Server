@@ -116,6 +116,104 @@ class SyslogDatabaseService {
     return inserted;
   }
 
+  /// Batch insert syslog records inside a single transaction, skipping any record
+  /// that is an exact match for an existing record in the database (or earlier in the batch).
+  ({List<SyslogRecord> inserted, int duplicateCount}) insertBatchDeduplicated(
+    List<SyslogRecord> records,
+  ) {
+    if (records.isEmpty) return (inserted: <SyslogRecord>[], duplicateCount: 0);
+
+    final inserted = <SyslogRecord>[];
+    int duplicateCount = 0;
+    PreparedStatement? existsStmt;
+    PreparedStatement? insertStmt;
+
+    _db.execute('BEGIN TRANSACTION');
+    try {
+      existsStmt = _db.prepare('''
+        SELECT 1 FROM syslog_records
+        WHERE received_at_ms = ?
+          AND remote_ip = ?
+          AND remote_port = ?
+          AND transport = ?
+          AND facility = ?
+          AND severity = ?
+          AND COALESCE(hostname, '') = ?
+          AND COALESCE(app_name, '') = ?
+          AND COALESCE(proc_id, '') = ?
+          AND COALESCE(msg_id, '') = ?
+          AND message = ?
+          AND raw_payload = ?
+        LIMIT 1
+      ''');
+
+      insertStmt = _db.prepare('''
+        INSERT INTO syslog_records (
+          received_at_ms, remote_ip, remote_port, transport,
+          facility, facility_name, severity, severity_name,
+          timestamp_str, hostname, app_name, proc_id, msg_id,
+          message, raw_payload
+        ) VALUES (
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        )
+      ''');
+
+      for (final r in records) {
+        final existing = existsStmt.select([
+          r.receivedAtMs,
+          r.remoteIp,
+          r.remotePort,
+          r.transport,
+          r.facility.code,
+          r.severity.code,
+          r.hostname ?? '',
+          r.appName ?? '',
+          r.procId ?? '',
+          r.msgId ?? '',
+          r.message,
+          r.rawPayload,
+        ]);
+
+        if (existing.isNotEmpty) {
+          duplicateCount++;
+          continue;
+        }
+
+        insertStmt.execute([
+          r.receivedAtMs,
+          r.remoteIp,
+          r.remotePort,
+          r.transport,
+          r.facility.code,
+          r.facility.nameStr,
+          r.severity.code,
+          r.severity.label,
+          r.timestampStr,
+          r.hostname,
+          r.appName,
+          r.procId,
+          r.msgId,
+          r.message,
+          r.rawPayload,
+        ]);
+        final id = _db.lastInsertRowId;
+        inserted.add(r.copyWith(id: id));
+      }
+      _db.execute('COMMIT');
+    } catch (e) {
+      _db.execute('ROLLBACK');
+      rethrow;
+    } finally {
+      existsStmt?.close();
+      insertStmt?.close();
+    }
+
+    if (inserted.isNotEmpty) {
+      _enforceRetentionCap();
+    }
+    return (inserted: inserted, duplicateCount: duplicateCount);
+  }
+
   void _enforceRetentionCap() {
     if (maxRows <= 0) return;
     try {

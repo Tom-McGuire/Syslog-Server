@@ -229,5 +229,123 @@ void main() {
 
       repo.dispose();
     });
+
+    test('Appending overlapping CSVs skips exact-match duplicates and imports only new rows', () async {
+      final dbService = SyslogDatabaseService(db: sqlite3.openInMemory());
+      final repo = SyslogRepository(databaseService: dbService);
+
+      const csv1 = '''Received At,Remote IP,Remote Port,Transport,Severity,Facility,Hostname,App / Tag,PID,Message,Raw Payload
+2026-10-24T09:00:00.000Z,192.168.1.10,514,UDP,Error,daemon,web-01,nginx,101,"502 Bad Gateway","<27>502 Bad Gateway"
+2026-10-24T09:00:01.000Z,192.168.1.11,514,UDP,Warning,daemon,web-02,nginx,102,"High memory consumption","<28>High memory consumption"
+''';
+
+      // Overlaps row 2 from csv1, adds 1 new row, and includes a near-match (different timestamp by 1ms)
+      const csv2 = '''Received At,Remote IP,Remote Port,Transport,Severity,Facility,Hostname,App / Tag,PID,Message,Raw Payload
+2026-10-24T09:00:01.000Z,192.168.1.11,514,UDP,Warning,daemon,web-02,nginx,102,"High memory consumption","<28>High memory consumption"
+2026-10-24T09:00:01.001Z,192.168.1.11,514,UDP,Warning,daemon,web-02,nginx,102,"High memory consumption","<28>High memory consumption"
+2026-10-24T09:00:02.000Z,192.168.1.12,514,TCP,Info,auth,auth-01,sshd,205,"Accepted publickey","<38>Accepted publickey"
+''';
+
+      final firstResult = await repo.importCsvContent(
+        csv1,
+        fileName: 'part1.csv',
+        replaceExisting: true,
+      );
+      expect(firstResult.importedCount, 2);
+      expect(firstResult.duplicateCount, 0);
+      expect(repo.getLogCount(const SyslogFilterCriteria()), 2);
+
+      final secondResult = await repo.importCsvContent(
+        csv2,
+        fileName: 'part2.csv',
+        replaceExisting: false,
+      );
+      expect(secondResult.importedCount, 2);
+      expect(secondResult.duplicateCount, 1);
+      expect(repo.getLogCount(const SyslogFilterCriteria()), 4);
+
+      // Appending csv2 a second time should skip all 3 rows as exact duplicates
+      final thirdResult = await repo.importCsvContent(
+        csv2,
+        fileName: 'part2_again.csv',
+        replaceExisting: false,
+      );
+      expect(thirdResult.importedCount, 0);
+      expect(thirdResult.duplicateCount, 3);
+      expect(repo.getLogCount(const SyslogFilterCriteria()), 4);
+
+      repo.dispose();
+    });
+
+    test('Importing a single CSV with internal exact duplicates skips duplicate rows', () async {
+      final dbService = SyslogDatabaseService(db: sqlite3.openInMemory());
+      final repo = SyslogRepository(databaseService: dbService);
+
+      const csvWithDupes = '''Received At,Remote IP,Severity,Facility,Hostname,Message
+2026-10-24T09:00:00.000Z,192.168.1.10,Error,daemon,web-01,"502 Bad Gateway"
+2026-10-24T09:00:00.000Z,192.168.1.10,Error,daemon,web-01,"502 Bad Gateway"
+2026-10-24T09:00:00.000Z,192.168.1.10,Warning,daemon,web-01,"502 Bad Gateway"
+''';
+
+      final result = await repo.importCsvContent(
+        csvWithDupes,
+        fileName: 'dupes.csv',
+        replaceExisting: true,
+      );
+
+      expect(result.importedCount, 2);
+      expect(result.duplicateCount, 1);
+      expect(repo.getLogCount(const SyslogFilterCriteria()), 2);
+
+      repo.dispose();
+    });
+
+    test('Appending overlapping exported JSON skips exact matches only', () async {
+      final dbService = SyslogDatabaseService(db: sqlite3.openInMemory());
+      final repo = SyslogRepository(databaseService: dbService);
+
+      final r1 = SyslogRecord(
+        receivedAtMs: 1761296400000,
+        remoteIp: '10.0.0.1',
+        remotePort: 514,
+        transport: 'UDP',
+        facility: SyslogFacility.daemon,
+        severity: SyslogSeverity.error,
+        hostname: 'gw-01',
+        appName: 'bgpd',
+        procId: '100',
+        msgId: 'ID1',
+        message: 'Peer down',
+        rawPayload: 'Peer down',
+      );
+      final r2 = SyslogRecord(
+        receivedAtMs: 1761296400000,
+        remoteIp: '10.0.0.1',
+        remotePort: 514,
+        transport: 'UDP',
+        facility: SyslogFacility.daemon,
+        severity: SyslogSeverity.error,
+        hostname: 'gw-01',
+        appName: 'bgpd',
+        procId: '100',
+        msgId: 'ID2', // Differs only by msgId -> NOT an exact match
+        message: 'Peer down',
+        rawPayload: 'Peer down',
+      );
+
+      final json1 = ExportService.logsToJson([r1]);
+      final json2 = ExportService.logsToJson([r1, r2]);
+
+      final res1 = await repo.importCsvContent(json1, replaceExisting: true);
+      expect(res1.importedCount, 1);
+      expect(res1.duplicateCount, 0);
+
+      final res2 = await repo.importCsvContent(json2, replaceExisting: false);
+      expect(res2.importedCount, 1);
+      expect(res2.duplicateCount, 1);
+      expect(repo.getLogCount(const SyslogFilterCriteria()), 2);
+
+      repo.dispose();
+    });
   });
 }

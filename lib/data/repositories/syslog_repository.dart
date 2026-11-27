@@ -127,14 +127,21 @@ class SyslogRepository {
     }
 
     final result = CsvImportService.parseCsv(csvContent);
+    final insertedRecords = <SyslogRecord>[];
+    int duplicateCount = 0;
+
     if (result.records.isNotEmpty) {
       const chunkSize = 500;
       for (int i = 0; i < result.records.length; i += chunkSize) {
         final end = (i + chunkSize < result.records.length) ? i + chunkSize : result.records.length;
         final chunk = result.records.sublist(i, end);
-        final inserted = _db.insertBatch(chunk);
-        if (!_batchStreamController.isClosed) {
-          _batchStreamController.add(inserted);
+        final batchResult = _db.insertBatchDeduplicated(chunk);
+        duplicateCount += batchResult.duplicateCount;
+        if (batchResult.inserted.isNotEmpty) {
+          insertedRecords.addAll(batchResult.inserted);
+          if (!_batchStreamController.isClosed) {
+            _batchStreamController.add(batchResult.inserted);
+          }
         }
       }
     }
@@ -155,10 +162,11 @@ class SyslogRepository {
 
     _loadedFileName = fileName ?? 'imported_logs.csv';
     return CsvImportResult(
-      records: result.records,
+      records: insertedRecords,
       totalLines: result.totalLines,
-      importedCount: result.importedCount,
+      importedCount: insertedRecords.length,
       skippedCount: result.skippedCount,
+      duplicateCount: duplicateCount,
       detectedFormat: result.detectedFormat,
       updatedDevicesCount: updatedDevices,
       deviceMappings: result.deviceMappings,
